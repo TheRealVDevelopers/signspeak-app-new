@@ -77,7 +77,7 @@ export function WebcamView({ onLandmarks, isCapturing, className }: WebcamViewPr
         videoRef.current.paused ||
         videoRef.current.ended
       ) {
-        if(isCapturing) animationFrameId = requestAnimationFrame(predictWebcam);
+        animationFrameId = requestAnimationFrame(predictWebcam);
         return;
       }
       const video = videoRef.current;
@@ -99,19 +99,21 @@ export function WebcamView({ onLandmarks, isCapturing, className }: WebcamViewPr
 
         if (results.landmarks.length > 0) {
           onLandmarksRef.current(results.landmarks[0], results.worldLandmarks[0] || []);
-          for (const landmarks of results.landmarks) {
-            drawingUtils.drawConnectors(landmarks, HandLandmarker.HAND_CONNECTIONS, { color: 'hsl(var(--primary))', lineWidth: 5 });
-            drawingUtils.drawLandmarks(landmarks, { color: 'hsl(var(--accent))', lineWidth: 2, radius: 4 });
+          if(isCapturing){
+            for (const landmarks of results.landmarks) {
+              drawingUtils.drawConnectors(landmarks, HandLandmarker.HAND_CONNECTIONS, { color: 'hsl(var(--primary))', lineWidth: 5 });
+              drawingUtils.drawLandmarks(landmarks, { color: 'hsl(var(--accent))', lineWidth: 2, radius: 4 });
+            }
           }
         } else {
           onLandmarksRef.current([], []);
         }
         canvasCtx.restore();
       }
-      if(isCapturing) animationFrameId = requestAnimationFrame(predictWebcam);
+      animationFrameId = requestAnimationFrame(predictWebcam);
     };
 
-    if (isCapturing && !isLoading) {
+    if (!isLoading) {
       predictWebcam();
     }
 

@@ -7,8 +7,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { useToast } from '@/hooks/use-toast';
 import { gestureDB } from '@/lib/db';
 import { Skeleton } from './ui/skeleton';
-import { BarChart, Hand, History } from 'lucide-react';
+import { BarChart, Hand, History, Play, Square } from 'lucide-react';
 import { Badge } from './ui/badge';
+import { Button } from './ui/button';
 
 const CONFIDENCE_THRESHOLD = 0.8;
 const FRAME_CONSISTENCY_COUNT = 3;
@@ -125,7 +126,7 @@ function normalizeLandmarks(landmarks: Landmark[]): Landmark[] {
 export function GestureDetector() {
   const [trainedGestures, setTrainedGestures] = useState<Gesture[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isDetecting, setIsDetecting] = useState(true);
+  const [isDetecting, setIsDetecting] = useState(false);
   
   const [detectionResult, setDetectionResult] = useState<{ label: string; confidence: number } | null>(null);
   const [detectionHistory, setDetectionHistory] = useState<string[]>([]);
@@ -162,33 +163,31 @@ export function GestureDetector() {
     }
     lastDetectionTimeRef.current = now;
 
-    const knnResult = kNearestNeighbors(landmarks, trainedGestures);
+    const knnResult = kNearestNeighbors(landmarks, trainedGestures, 3);
+    
+    // Always use the result from KNN, but only update the final display after multi-frame verification
+    if (knnResult.confidence > CONFIDENCE_THRESHOLD && knnResult.label !== 'No gestures trained') {
+        recentDetectionsRef.current.push(knnResult.label);
+        if (recentDetectionsRef.current.length > FRAME_CONSISTENCY_COUNT * 2) {
+            recentDetectionsRef.current.shift();
+        }
 
-    if (knnResult.recognizedGesture !== 'No gestures trained' && knnResult.confidence > CONFIDENCE_THRESHOLD) {
-      recentDetectionsRef.current.push(knnResult.recognizedGesture);
-      if (recentDetectionsRef.current.length > FRAME_CONSISTENCY_COUNT * 2) { // Keep a bit more history
-        recentDetectionsRef.current.shift();
-      }
-
-      if (recentDetectionsRef.current.length >= FRAME_CONSISTENCY_COUNT) {
         const verificationResult = verifyMultiFrameConsistency(
             recentDetectionsRef.current,
             FRAME_CONSISTENCY_COUNT
         );
-
+        
         if (verificationResult.isValidGesture && verificationResult.consistentGesture) {
-          if (detectionResult?.label !== verificationResult.consistentGesture) {
-            setDetectionResult({ label: verificationResult.consistentGesture, confidence: knnResult.confidence });
-            setDetectionHistory(prev => [verificationResult.consistentGesture!, ...prev].slice(0, 5));
-            recentDetectionsRef.current = []; // Clear buffer after a successful detection
-          }
+             if (detectionResult?.label !== verificationResult.consistentGesture) {
+                setDetectionResult({ label: verificationResult.consistentGesture, confidence: knnResult.confidence });
+                setDetectionHistory(prev => [verificationResult.consistentGesture!, ...prev].slice(0, 5));
+                recentDetectionsRef.current = []; // Clear buffer
+             }
         }
-      }
     } else {
-      // If confidence is low, start clearing the buffer
-      if(recentDetectionsRef.current.length > 0) {
-        recentDetectionsRef.current.shift();
-      }
+       if (recentDetectionsRef.current.length > 0) {
+         recentDetectionsRef.current.shift();
+       }
     }
   }, [trainedGestures, isDetecting, detectionResult]);
 
@@ -198,8 +197,11 @@ export function GestureDetector() {
 
   return (
     <div className="container py-8 grid lg:grid-cols-3 gap-8">
-      <div className="lg:col-span-2">
-        <WebcamView onLandmarks={handleLandmarks} isCapturing={isDetecting} className="w-full aspect-video shadow-lg" />
+      <div className="lg:col-span-2 space-y-4">
+        <WebcamView onLandmarks={handleLandmarks} isCapturing={true} className="w-full aspect-video shadow-lg" />
+         <Button onClick={() => setIsDetecting(!isDetecting)} size="lg" className="w-full" disabled={isLoading || trainedGestures.length === 0}>
+          {isDetecting ? <><Square className="mr-2" />Stop Detection</> : <><Play className="mr-2" />Start Detection</>}
+        </Button>
       </div>
       <div className="space-y-8">
         <Card className="shadow-lg h-fit">
@@ -211,8 +213,8 @@ export function GestureDetector() {
           <CardContent className="text-center min-h-[150px] flex flex-col justify-center items-center">
             {isLoading ? (
                 <Skeleton className="w-3/4 h-16" />
-            ) : trainedGestures.length === 0 ? (
-                 <p className="text-xl text-muted-foreground">Go to Train Page</p>
+            ) : !isDetecting ? (
+                 <p className="text-xl text-muted-foreground">Press Start to Detect</p>
             ) : detectionResult ? (
               <>
                 <p className="text-5xl font-bold font-headline text-primary truncate">{detectionResult.label}</p>
