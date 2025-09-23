@@ -21,7 +21,6 @@ export default function HomePage() {
         <Separator />
         <FeaturesSection />
         <Separator />
-        <IslEducationSection />
         <Separator />
         <TechnologySection />
         <Separator />
