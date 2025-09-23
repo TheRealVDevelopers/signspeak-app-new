@@ -196,17 +196,17 @@ export function GestureDetector() {
   }, [handleDetection]);
 
   return (
-    <div className="container py-8 grid lg:grid-cols-3 gap-8">
+    <div className="grid lg:grid-cols-3 gap-8">
       <div className="lg:col-span-2 space-y-4">
-        <WebcamView onLandmarks={handleLandmarks} isCapturing={true} className="w-full aspect-video shadow-lg" />
+        <WebcamView onLandmarks={handleLandmarks} isCapturing={true} className="w-full aspect-video" />
          <Button onClick={() => setIsDetecting(!isDetecting)} size="lg" className="w-full" disabled={isLoading || trainedGestures.length === 0}>
           {isDetecting ? <><Square className="mr-2" />Stop Detection</> : <><Play className="mr-2" />Start Detection</>}
         </Button>
       </div>
       <div className="space-y-8">
-        <Card className="shadow-lg h-fit">
+        <Card className="glass-card h-fit">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 font-headline text-2xl">
+            <CardTitle className="flex items-center gap-2 text-2xl">
               <Hand /> Detected Gesture
             </CardTitle>
           </CardHeader>
@@ -217,7 +217,7 @@ export function GestureDetector() {
                  <p className="text-xl text-muted-foreground">Press Start to Detect</p>
             ) : detectionResult ? (
               <>
-                <p className="text-5xl font-bold font-headline text-primary truncate">{detectionResult.label}</p>
+                <p className="text-5xl font-bold text-primary truncate">{detectionResult.label}</p>
                 <Badge variant="secondary" className="mt-4 flex items-center gap-1">
                   <BarChart className="h-4 w-4" />
                   Confidence: {(detectionResult.confidence * 100).toFixed(0)}%
@@ -229,9 +229,9 @@ export function GestureDetector() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-lg">
+        <Card className="glass-card">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 font-headline text-xl">
+            <CardTitle className="flex items-center gap-2 text-xl">
               <History /> Detection History
             </CardTitle>
             <CardDescription>Last 5 recognized gestures.</CardDescription>

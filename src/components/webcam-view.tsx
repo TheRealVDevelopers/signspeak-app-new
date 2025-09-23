@@ -125,7 +125,7 @@ export function WebcamView({ onLandmarks, isCapturing, className }: WebcamViewPr
   }, [isCapturing, isLoading]);
 
   return (
-    <div className={cn('relative overflow-hidden rounded-lg bg-muted', className)}>
+    <div className={cn('relative overflow-hidden rounded-lg bg-card', className)}>
       {isLoading && <Skeleton className="absolute inset-0 z-20" />}
       <video
         ref={videoRef}

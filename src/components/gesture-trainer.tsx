@@ -155,10 +155,10 @@ export function GestureTrainer() {
   }, [isCapturing]);
 
   return (
-    <div className="container py-8 grid lg:grid-cols-2 gap-8">
-      <Card className="shadow-lg">
+    <div className="grid lg:grid-cols-2 gap-8">
+      <Card className="glass-card">
         <CardHeader>
-          <CardTitle className="font-headline text-2xl">Train New Gesture</CardTitle>
+          <CardTitle className="text-2xl">Train New Gesture</CardTitle>
           <CardDescription>Capture {SAMPLES_REQUIRED} samples of a gesture for the AI to learn.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -227,9 +227,9 @@ export function GestureTrainer() {
       </Card>
       
       <div className="space-y-8">
-        <Card className="shadow-lg">
+        <Card className="glass-card">
           <CardHeader>
-            <CardTitle className="font-headline text-2xl">Trained Gestures</CardTitle>
+            <CardTitle className="text-2xl">Trained Gestures</CardTitle>
             <CardDescription>A list of all gestures you have trained.</CardDescription>
           </CardHeader>
           <CardContent>
