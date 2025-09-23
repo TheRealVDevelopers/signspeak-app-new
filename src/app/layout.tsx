@@ -33,20 +33,12 @@ export default function RootLayout({
           <Sidebar>
             <SidebarContent className="p-4">
               <div className="mb-4">
-                <Link href="/train" className="flex items-center gap-2">
+                <Link href="/detect" className="flex items-center gap-2">
                     <Hand className="h-7 w-7 text-primary" />
                     <span className="font-bold text-xl">SignSpeak</span>
                 </Link>
               </div>
               <SidebarMenu>
-                <SidebarMenuItem>
-                   <SidebarMenuButton asChild>
-                      <Link href="/train">
-                        <BrainCircuit />
-                        <span>Train</span>
-                      </Link>
-                   </SidebarMenuButton>
-                </SidebarMenuItem>
                 <SidebarMenuItem>
                    <SidebarMenuButton asChild>
                       <Link href="/detect">
