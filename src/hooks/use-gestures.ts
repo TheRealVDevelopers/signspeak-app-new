@@ -20,7 +20,12 @@ export function useGestures() {
   }, [refreshGestures]);
 
   const addGesture = async (gesture: Gesture) => {
-    await gestureDB.add(gesture);
+    // Ensure description is always a string
+    const gestureWithDescription = {
+      ...gesture,
+      description: gesture.description || '',
+    };
+    await gestureDB.add(gestureWithDescription);
     await refreshGestures();
   };
 

@@ -10,11 +10,12 @@ import { Input } from './ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './ui/card';
 import { Progress } from './ui/progress';
 import { ScrollArea } from './ui/scroll-area';
-import { Camera, Trash2, Loader2, CheckCircle, ArrowRight } from 'lucide-react';
+import { Camera, Trash2, Loader2, CheckCircle, ArrowRight, X } from 'lucide-react';
 import { validateGesture } from '@/ai/flows/gesture-validation-tool';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { useRouter } from 'next/navigation';
 import { Skeleton } from './ui/skeleton';
+import { Textarea } from './ui/textarea';
 
 const SAMPLES_REQUIRED = 20;
 
@@ -22,6 +23,7 @@ export function GestureTrainer() {
   const router = useRouter();
   const { gestures, addGesture, deleteGesture, isLoading: isGesturesLoading } = useGestures();
   const [gestureName, setGestureName] = useState('');
+  const [gestureDescription, setGestureDescription] = useState('');
   const [capturedSamples, setCapturedSamples] = useState<LandmarkData[]>([]);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -46,10 +48,18 @@ export function GestureTrainer() {
       setCapturedSamples(prev => [...prev, lastLandmarks]);
     }
   };
+  
+  const handleDeleteSample = (index: number) => {
+    setCapturedSamples(prev => prev.filter((_, i) => i !== index));
+  };
 
   const handleSaveGesture = async () => {
     if (gestureName.trim() === '') {
       toast({ variant: 'destructive', title: 'Error', description: 'Please enter a name for the gesture.' });
+      return;
+    }
+     if (gestureDescription.trim() === '') {
+      toast({ variant: 'destructive', title: 'Error', description: 'Please enter a description for the gesture.' });
       return;
     }
     if (capturedSamples.length < SAMPLES_REQUIRED) {
@@ -58,7 +68,7 @@ export function GestureTrainer() {
     }
 
     setIsSaving(true);
-    const newGesture = { label: gestureName, samples: capturedSamples };
+    const newGesture = { label: gestureName, description: gestureDescription, samples: capturedSamples };
     
     const landmarkDataForValidation = newGesture.samples.map(sample => sample.flatMap(lm => [lm.x, lm.y, lm.z]));
     const trainedLandmarksForValidation = gestures.reduce((acc, g) => {
@@ -73,19 +83,20 @@ export function GestureTrainer() {
             trainedLandmarks: trainedLandmarksForValidation,
         });
 
-        if (validationResult.isValid && validationResult.confidence > 0.7) {
+        if (validationResult.isValid) {
             await addGesture(newGesture);
             toast({
                 title: 'Gesture Saved!',
-                description: `${gestureName} has been trained successfully. Confidence: ${(validationResult.confidence * 100).toFixed(0)}%`,
+                description: `${gestureName} has been trained successfully.`,
             });
             setGestureName('');
+            setGestureDescription('');
             setCapturedSamples([]);
         } else {
             toast({
                 variant: 'destructive',
                 title: 'Validation Failed',
-                description: `Try again with clearer movements. Confidence: ${(validationResult.confidence * 100).toFixed(0)}%`,
+                description: `This gesture is too similar to another gesture. Please try again. Confidence of mismatch: ${(validationResult.confidence * 100).toFixed(0)}%`,
             });
         }
     } catch (error) {
@@ -123,6 +134,12 @@ export function GestureTrainer() {
               onChange={(e) => setGestureName(e.target.value)}
               disabled={isSaving || !isCapturing}
             />
+             <Textarea
+              placeholder="Describe how to make the gesture..."
+              value={gestureDescription}
+              onChange={(e) => setGestureDescription(e.target.value)}
+              disabled={isSaving || !isCapturing}
+            />
             <div className="flex items-center gap-4">
               <Button onClick={handleCapture} disabled={!isCapturing || capturedSamples.length >= SAMPLES_REQUIRED || isSaving || !gestureName} className="flex-1">
                 <Camera className="mr-2" /> Capture Sample
@@ -131,6 +148,29 @@ export function GestureTrainer() {
               <span className="text-sm text-muted-foreground">{capturedSamples.length}/{SAMPLES_REQUIRED}</span>
             </div>
           </div>
+
+          {capturedSamples.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium">Captured Samples</h3>
+              <ScrollArea className="h-24">
+                <div className="grid grid-cols-5 gap-2 pr-4">
+                  {capturedSamples.map((sample, index) => (
+                    <div key={index} className="relative group aspect-square bg-muted rounded-md flex items-center justify-center">
+                       <span className="text-xs text-muted-foreground">{index + 1}</span>
+                       <Button
+                        variant="destructive"
+                        size="icon"
+                        className="absolute -top-2 -right-2 h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => handleDeleteSample(index)}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            </div>
+          )}
           
           {capturedSamples.length >= SAMPLES_REQUIRED && (
             <Alert className="border-primary bg-primary/10">
@@ -161,11 +201,14 @@ export function GestureTrainer() {
                 {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
               </div>
             ) : gestures.length > 0 ? (
-              <ScrollArea className="h-[280px]">
+              <ScrollArea className="h-[360px]">
                 <div className="space-y-2 pr-4">
                   {gestures.map((gesture) => (
-                    <div key={gesture.label} className="flex items-center justify-between p-2 rounded-lg bg-background hover:bg-secondary transition-colors">
-                      <p className="font-medium">{gesture.label}</p>
+                    <div key={gesture.label} className="flex items-start justify-between p-3 rounded-lg bg-background hover:bg-secondary transition-colors">
+                      <div>
+                        <p className="font-medium">{gesture.label}</p>
+                        <p className="text-sm text-muted-foreground">{gesture.description}</p>
+                      </div>
                       <Button variant="ghost" size="icon" onClick={() => deleteGesture(gesture.label)} aria-label={`Delete ${gesture.label}`}>
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>

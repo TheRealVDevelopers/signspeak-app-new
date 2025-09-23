@@ -9,5 +9,6 @@ export type LandmarkData = Landmark[];
 
 export interface Gesture {
   label: string;
+  description: string;
   samples: LandmarkData[];
 }
