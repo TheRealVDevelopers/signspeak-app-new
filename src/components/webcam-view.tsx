@@ -1,11 +1,9 @@
 'use client';
 
-import { HandLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
+import { HandLandmarker, FilesetResolver, DrawingUtils, HAND_CONNECTIONS } from '@mediapipe/tasks-vision';
 import type { NormalizedLandmark } from '@mediapipe/tasks-vision';
 import type { Landmark } from '@/lib/types';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
-import { HAND_CONNECTIONS } from '@mediapipe/hands';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from './ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -41,7 +39,7 @@ export function WebcamView({ onLandmarks, isCapturing, className }: WebcamViewPr
           runningMode: 'VIDEO',
           numHands: 1,
         });
-
+        
         stream = await navigator.mediaDevices.getUserMedia({ video: true });
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
@@ -93,6 +91,8 @@ export function WebcamView({ onLandmarks, isCapturing, className }: WebcamViewPr
         
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
+        
+        const drawingUtils = new DrawingUtils(canvasCtx);
 
         canvasCtx.save();
         canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
@@ -100,8 +100,8 @@ export function WebcamView({ onLandmarks, isCapturing, className }: WebcamViewPr
         if (results.landmarks.length > 0) {
           onLandmarksRef.current(results.landmarks[0], results.worldLandmarks[0] || []);
           for (const landmarks of results.landmarks) {
-            drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: 'hsl(var(--primary))', lineWidth: 5 });
-            drawLandmarks(canvasCtx, landmarks, { color: 'hsl(var(--accent))', lineWidth: 2, radius: 4 });
+            drawingUtils.drawConnectors(landmarks, HAND_CONNECTIONS, { color: 'hsl(var(--primary))', lineWidth: 5 });
+            drawingUtils.drawLandmarks(landmarks, { color: 'hsl(var(--accent))', lineWidth: 2, radius: 4 });
           }
         } else {
           onLandmarksRef.current([], []);
