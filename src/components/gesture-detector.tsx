@@ -6,15 +6,121 @@ import { WebcamView } from './webcam-view';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { gestureDB } from '@/lib/db';
-import { knnGestureRecognition } from '@/ai/flows/knn-gesture-recognition';
-import { verifyMultiFrameConsistency } from '@/ai/flows/multi-frame-verification';
 import { Skeleton } from './ui/skeleton';
 import { BarChart, Hand, History } from 'lucide-react';
 import { Badge } from './ui/badge';
 
 const CONFIDENCE_THRESHOLD = 0.8;
 const FRAME_CONSISTENCY_COUNT = 3;
-const DETECTION_INTERVAL_MS = 100;
+const DETECTION_INTERVAL_MS = 50; // Reduced for faster detection
+
+// Simple KNN implementation moved to client-side for speed
+function kNearestNeighbors(
+  inputLandmarks: Landmark[],
+  trainedGestures: {label: string; samples: Landmark[][]}[],
+  k: number = 3
+): {label: string; confidence: number} {
+  if (!trainedGestures || trainedGestures.length === 0) {
+    return {label: 'No gestures trained', confidence: 0};
+  }
+
+  const distances: {label: string; distance: number}[] = [];
+  const normalizedInput = normalizeLandmarks(inputLandmarks);
+
+  for (const gesture of trainedGestures) {
+    for (const sample of gesture.samples) {
+      const normalizedSample = normalizeLandmarks(sample);
+      let totalDistance = 0;
+      for (let i = 0; i < Math.min(normalizedInput.length, normalizedSample.length); i++) {
+        const dx = normalizedInput[i].x - normalizedSample[i].x;
+        const dy = normalizedInput[i].y - normalizedSample[i].y;
+        const dz = normalizedInput[i].z - normalizedSample[i].z;
+        totalDistance += Math.sqrt(dx * dx + dy * dy + dz * dz);
+      }
+      distances.push({label: gesture.label, distance: totalDistance / normalizedInput.length });
+    }
+  }
+
+  distances.sort((a, b) => a.distance - b.distance);
+
+  const nearestNeighbors = distances.slice(0, k);
+
+  if (nearestNeighbors.length === 0) {
+      return {label: 'Unknown', confidence: 0};
+  }
+  
+  const neighborCounts: {[label: string]: number} = {};
+  for (const neighbor of nearestNeighbors) {
+    neighborCounts[neighbor.label] = (neighborCounts[neighbor.label] || 0) + 1;
+  }
+
+  let predictedLabel = '';
+  let maxCount = 0;
+  for (const label in neighborCounts) {
+    if (neighborCounts[label] > maxCount) {
+      predictedLabel = label;
+      maxCount = neighborCounts[label];
+    }
+  }
+
+  const confidence = maxCount / k;
+
+  return {label: predictedLabel, confidence: confidence};
+}
+
+// Multi-frame verification moved to client-side
+function verifyMultiFrameConsistency(
+    detectedGestures: string[],
+    requiredConsistency: number
+): { isValidGesture: boolean; consistentGesture?: string } {
+    if (detectedGestures.length < requiredConsistency) {
+        return { isValidGesture: false };
+    }
+    const lastGestures = detectedGestures.slice(-requiredConsistency);
+    const firstGesture = lastGestures[0];
+    const isConsistent = lastGestures.every(g => g === firstGesture);
+    
+    if (isConsistent) {
+        return { isValidGesture: true, consistentGesture: firstGesture };
+    }
+    return { isValidGesture: false };
+}
+
+
+function normalizeLandmarks(landmarks: Landmark[]): Landmark[] {
+    if (landmarks.length === 0) return [];
+
+    const centroid = landmarks.reduce((acc, lm) => ({
+        x: acc.x + lm.x,
+        y: acc.y + lm.y,
+        z: acc.z + lm.z,
+    }), { x: 0, y: 0, z: 0 });
+
+    centroid.x /= landmarks.length;
+    centroid.y /= landmarks.length;
+    centroid.z /= landmarks.length;
+
+    let maxDist = 0;
+    for (const lm of landmarks) {
+        const dist = Math.sqrt(
+            Math.pow(lm.x - centroid.x, 2) +
+            Math.pow(lm.y - centroid.y, 2) +
+            Math.pow(lm.z - centroid.z, 2)
+        );
+        if (dist > maxDist) {
+            maxDist = dist;
+        }
+    }
+
+    if (maxDist === 0) return landmarks.map(() => ({ x: 0, y: 0, z: 0 }));
+
+    return landmarks.map(lm => ({
+        x: (lm.x - centroid.x) / maxDist,
+        y: (lm.y - centroid.y) / maxDist,
+        z: (lm.z - centroid.z) / maxDist,
+    }));
+}
+
 
 export function GestureDetector() {
   const [trainedGestures, setTrainedGestures] = useState<Gesture[]>([]);
@@ -45,7 +151,7 @@ export function GestureDetector() {
     loadGestures();
   }, [toast]);
 
-  const handleDetection = useCallback(async (landmarks: Landmark[]) => {
+  const handleDetection = useCallback((landmarks: Landmark[]) => {
     if (landmarks.length === 0 || trainedGestures.length === 0 || !isDetecting) {
       return;
     }
@@ -56,42 +162,33 @@ export function GestureDetector() {
     }
     lastDetectionTimeRef.current = now;
 
-    const formattedTrainedGestures = trainedGestures.map(g => ({
-        label: g.label,
-        samples: g.samples.map(sample => sample.map(lm => ({ x: lm.x, y: lm.y, z: lm.z }))),
-    }));
+    const knnResult = kNearestNeighbors(landmarks, trainedGestures);
 
-    try {
-      const knnResult = await knnGestureRecognition({
-        landmarks,
-        trainedGestures: formattedTrainedGestures,
-      });
+    if (knnResult.recognizedGesture !== 'No gestures trained' && knnResult.confidence > CONFIDENCE_THRESHOLD) {
+      recentDetectionsRef.current.push(knnResult.recognizedGesture);
+      if (recentDetectionsRef.current.length > FRAME_CONSISTENCY_COUNT * 2) { // Keep a bit more history
+        recentDetectionsRef.current.shift();
+      }
 
-      if (knnResult.recognizedGesture !== 'No gestures trained' && knnResult.confidence > CONFIDENCE_THRESHOLD) {
-        recentDetectionsRef.current.push(knnResult.recognizedGesture);
-        if (recentDetectionsRef.current.length > FRAME_CONSISTENCY_COUNT) {
-          recentDetectionsRef.current.shift();
-        }
+      if (recentDetectionsRef.current.length >= FRAME_CONSISTENCY_COUNT) {
+        const verificationResult = verifyMultiFrameConsistency(
+            recentDetectionsRef.current,
+            FRAME_CONSISTENCY_COUNT
+        );
 
-        if (recentDetectionsRef.current.length === FRAME_CONSISTENCY_COUNT) {
-          const verificationResult = await verifyMultiFrameConsistency({
-            detectedGestures: recentDetectionsRef.current,
-            requiredConsistency: FRAME_CONSISTENCY_COUNT,
-          });
-
-          if (verificationResult.isValidGesture && verificationResult.consistentGesture) {
-            if (detectionResult?.label !== verificationResult.consistentGesture) {
-              setDetectionResult({ label: verificationResult.consistentGesture, confidence: knnResult.confidence });
-              setDetectionHistory(prev => [verificationResult.consistentGesture!, ...prev].slice(0, 5));
-            }
+        if (verificationResult.isValidGesture && verificationResult.consistentGesture) {
+          if (detectionResult?.label !== verificationResult.consistentGesture) {
+            setDetectionResult({ label: verificationResult.consistentGesture, confidence: knnResult.confidence });
+            setDetectionHistory(prev => [verificationResult.consistentGesture!, ...prev].slice(0, 5));
+            recentDetectionsRef.current = []; // Clear buffer after a successful detection
           }
         }
-      } else {
-        recentDetectionsRef.current = [];
       }
-    } catch (error) {
-      console.error('Detection error:', error);
-      setIsDetecting(false); // Stop detection on error
+    } else {
+      // If confidence is low, start clearing the buffer
+      if(recentDetectionsRef.current.length > 0) {
+        recentDetectionsRef.current.shift();
+      }
     }
   }, [trainedGestures, isDetecting, detectionResult]);
 

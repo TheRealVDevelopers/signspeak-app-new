@@ -17,7 +17,42 @@ import { useRouter } from 'next/navigation';
 import { Skeleton } from './ui/skeleton';
 import { Textarea } from './ui/textarea';
 
-const SAMPLES_REQUIRED = 20;
+const SAMPLES_REQUIRED = 30; // Increased for better accuracy
+
+function normalizeLandmarks(landmarks: Landmark[]): Landmark[] {
+    if (landmarks.length === 0) return [];
+
+    const centroid = landmarks.reduce((acc, lm) => ({
+        x: acc.x + lm.x,
+        y: acc.y + lm.y,
+        z: acc.z + lm.z,
+    }), { x: 0, y: 0, z: 0 });
+
+    centroid.x /= landmarks.length;
+    centroid.y /= landmarks.length;
+    centroid.z /= landmarks.length;
+
+    let maxDist = 0;
+    for (const lm of landmarks) {
+        const dist = Math.sqrt(
+            Math.pow(lm.x - centroid.x, 2) +
+            Math.pow(lm.y - centroid.y, 2) +
+            Math.pow(lm.z - centroid.z, 2)
+        );
+        if (dist > maxDist) {
+            maxDist = dist;
+        }
+    }
+
+    if (maxDist === 0) return landmarks.map(() => ({ x: 0, y: 0, z: 0 }));
+
+    return landmarks.map(lm => ({
+        x: (lm.x - centroid.x) / maxDist,
+        y: (lm.y - centroid.y) / maxDist,
+        z: (lm.z - centroid.z) / maxDist,
+    }));
+}
+
 
 export function GestureTrainer() {
   const router = useRouter();
@@ -68,7 +103,9 @@ export function GestureTrainer() {
     }
 
     setIsSaving(true);
-    const newGesture = { label: gestureName, description: gestureDescription, samples: capturedSamples };
+
+    const normalizedSamples = capturedSamples.map(sample => normalizeLandmarks(sample));
+    const newGesture = { label: gestureName, description: gestureDescription, samples: normalizedSamples };
     
     const landmarkDataForValidation = newGesture.samples.map(sample => sample.flatMap(lm => [lm.x, lm.y, lm.z]));
     const trainedLandmarksForValidation = gestures.reduce((acc, g) => {
@@ -96,7 +133,7 @@ export function GestureTrainer() {
             toast({
                 variant: 'destructive',
                 title: 'Validation Failed',
-                description: `This gesture is too similar to another gesture. Please try again. Confidence of mismatch: ${(validationResult.confidence * 100).toFixed(0)}%`,
+                description: `This gesture name already exists. Please choose a different name.`,
             });
         }
     } catch (error) {
