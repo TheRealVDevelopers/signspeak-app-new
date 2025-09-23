@@ -3,7 +3,7 @@ import './globals.css';
 import { cn } from '@/lib/utils';
 import { Toaster } from '@/components/ui/toaster';
 import { SidebarProvider, Sidebar, SidebarTrigger, SidebarContent, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarInset } from '@/components/ui/sidebar';
-import { BrainCircuit, Scan, Hand } from 'lucide-react';
+import { BrainCircuit, Scan, Hand, Home } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 
@@ -33,12 +33,20 @@ export default function RootLayout({
           <Sidebar>
             <SidebarContent className="p-4">
               <div className="mb-4">
-                <Link href="/detect" className="flex items-center gap-2">
+                <Link href="/" className="flex items-center gap-2">
                     <Hand className="h-7 w-7 text-primary" />
                     <span className="font-bold text-xl">SignSpeak</span>
                 </Link>
               </div>
               <SidebarMenu>
+                 <SidebarMenuItem>
+                   <SidebarMenuButton asChild>
+                      <Link href="/">
+                        <Home />
+                        <span>Home</span>
+                      </Link>
+                   </SidebarMenuButton>
+                </SidebarMenuItem>
                 <SidebarMenuItem>
                    <SidebarMenuButton asChild>
                       <Link href="/detect">
@@ -63,7 +71,7 @@ export default function RootLayout({
                     </Button>
                 </div>
              </header>
-            <main className="p-4 md:p-8">{children}</main>
+            <main className="p-0 md:p-0">{children}</main>
           </SidebarInset>
         </SidebarProvider>
         <Toaster />
