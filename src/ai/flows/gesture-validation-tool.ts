@@ -41,26 +41,6 @@ export async function validateGesture(
   return validateGestureFlow(input);
 }
 
-const prompt = ai.definePrompt({
-  name: 'validateGesturePrompt',
-  input: {
-    schema: ValidateGestureInputSchema,
-  },
-  output: {schema: ValidateGestureOutputSchema},
-  prompt: `You are an AI validation tool that determines if a given gesture
-  matches its training data using a K-Nearest Neighbors (KNN) approach.
-
-  Input gesture name: {{{gestureName}}}
-  Input landmark data: {{{landmarkData}}}
-  Trained landmark data: {{{trainedLandmarks}}}
-
-  Determine if the input landmark data closely resembles any of the
-  trained landmark samples for the given gesture name.
-
-  Return whether the gesture is valid and provide a confidence score.
-  `,
-});
-
 // Helper function to calculate Euclidean distance between two landmark sets
 function euclideanDistance(landmarks1: number[], landmarks2: number[]): number {
     let sum = 0;
@@ -74,13 +54,13 @@ function euclideanDistance(landmarks1: number[], landmarks2: number[]): number {
 function knn(newGestureSamples: number[][], trainedGestures: Record<string, number[][]>, k: number = 3): { predictedLabel: string, confidence: number } {
     const distances: { label: string, distance: number }[] = [];
 
-    // Calculate distances from each sample of the new gesture to all samples of trained gestures
-    for (const sample of newGestureSamples) {
-        for (const label in trainedGestures) {
-            for (const trainedSample of trainedGestures[label]) {
-                const distance = euclideanDistance(sample, trainedSample);
-                distances.push({ label, distance });
-            }
+    // Flatten the new gesture samples for comparison, as we only need one to check against all trained samples
+    const sampleToCompare = newGestureSamples[0];
+    
+    for (const label in trainedGestures) {
+        for (const trainedSample of trainedGestures[label]) {
+            const distance = euclideanDistance(sampleToCompare, trainedSample);
+            distances.push({ label, distance });
         }
     }
     
@@ -117,36 +97,35 @@ const validateGestureFlow = ai.defineFlow(
   async input => {
     const { gestureName, landmarkData, trainedLandmarks } = input;
     
+    // A simple check to see the gesture name already exists as a key in trainedLandmarks
+    const gestureExists = Object.keys(trainedLandmarks).includes(
+      gestureName
+    );
+    if(gestureExists){
+      // Gesture name already exists, this is not a valid new gesture.
+      return { isValid: false, confidence: 0.0 };
+    }
+
     // Check if there's anything to compare against
     if (Object.keys(trainedLandmarks).length === 0) {
-        // First gesture, always valid.
+        // This is the first gesture being trained, so it's always valid.
         return { isValid: true, confidence: 1.0 };
     }
 
     const { predictedLabel, confidence } = knn(landmarkData, trainedLandmarks, 5);
 
-    // The new gesture is considered valid if it doesn't closely match an *existing different* gesture.
+    // The new gesture is considered invalid if it too closely matches an *existing different* gesture.
     // A high confidence match for a *different* gesture name means it's likely a duplicate or too similar.
-    const isSimilarToOtherGesture = predictedLabel !== '' && predictedLabel !== gestureName && confidence > 0.5;
+    const isTooSimilarToAnotherGesture = predictedLabel !== gestureName && confidence > 0.6;
 
-    if (isSimilarToOtherGesture) {
-      return { isValid: false, confidence: 1 - confidence };
+    if (isTooSimilarToAnotherGesture) {
+      // It's too similar to another gesture, so it's not a valid new gesture.
+      // We return the confidence of the mismatch.
+      return { isValid: false, confidence: confidence };
     }
 
-    // A simple check to see the gesture name exists as a key in trainedLandmarks
-    const gestureExists = Object.keys(trainedLandmarks).includes(
-      gestureName
-    );
-    if(gestureExists){
-      return { isValid: false, confidence: 0.3 }; // Gesture name already exists
-    }
-
-    // If it's not too similar to others, and the name is new, we can accept it.
-    // Confidence here could represent clarity or uniqueness. For now, let's use a proxy.
-    const averageDistance = 1;
-    const validationConfidence = Math.max(0.75, Math.min(1, 1 / (1 + averageDistance)));
-
-
-    return { isValid: true, confidence: validationConfidence };
+    // If it's not a duplicate name and not too similar to other gestures, we can accept it.
+    // The confidence here can represent its uniqueness. Let's return a high confidence.
+    return { isValid: true, confidence: 1.0 - confidence };
   }
 );
