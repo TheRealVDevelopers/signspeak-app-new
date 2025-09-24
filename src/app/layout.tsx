@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { Toaster } from '@/components/ui/toaster';
 import { Hand } from 'lucide-react';
 import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 
 export const metadata: Metadata = {
   title: 'SignSpeak',
@@ -32,6 +33,9 @@ export default function RootLayout({
             <Hand className="h-7 w-7 text-primary" />
             <span className="font-bold text-xl">SignSpeak</span>
           </Link>
+          <Button asChild>
+            <Link href="/train">Train Gestures</Link>
+          </Button>
         </header>
         <main className="p-4 md:p-8">{children}</main>
         <Toaster />
