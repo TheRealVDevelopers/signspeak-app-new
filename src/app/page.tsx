@@ -9,6 +9,7 @@ import { LearningResourcesSection } from '@/components/landing/learning-resource
 import { FaqSection } from '@/components/landing/faq-section';
 import { GettingStartedSection } from '@/components/landing/getting-started-section';
 import { Separator } from '@/components/ui/separator';
+import { TrainingSection } from '@/components/landing/training-section';
 
 export default function HomePage() {
   return (
@@ -21,6 +22,7 @@ export default function HomePage() {
         <Separator />
         <FeaturesSection />
         <Separator />
+        <TrainingSection />
         <Separator />
         <TechnologySection />
         <Separator />

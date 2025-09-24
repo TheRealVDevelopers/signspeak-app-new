@@ -22,7 +22,7 @@ export function HeroSection() {
               <Link href="/detect">Start Detecting</Link>
             </Button>
             <Button asChild variant="outline" size="lg">
-              <Link href="">Learn More</Link>
+              <Link href="/train">Train Gestures</Link>
             </Button>
           </div>
         </div>
