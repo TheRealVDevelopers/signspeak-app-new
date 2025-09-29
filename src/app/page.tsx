@@ -143,6 +143,30 @@ function GlimpseIntoISLSection() {
   );
 }
 
+function CallToActionSection() {
+  return (
+    <section id="cta" className="w-full py-12 md:py-24 lg:py-32">
+      <div className="container px-4 md:px-6">
+        <div className="mx-auto max-w-3xl text-center">
+            <Card className="glass-card p-8 md:p-12 flex flex-col items-center">
+                <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl mb-4">
+                Ready to Communicate?
+                </h2>
+                <p className="text-muted-foreground md:text-xl mb-8">
+                Experience seamless sign language detection and break down communication barriers today.
+                </p>
+                <Button asChild size="lg" className="bg-gradient-to-r from-primary to-secondary text-white">
+                <Link href="/detect">
+                    Go to Detector <ArrowRight className="ml-2 h-5 w-5" />
+                </Link>
+                </Button>
+            </Card>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function HomePage() {
   return (
     <div className="bg-background text-foreground">
@@ -150,6 +174,7 @@ export default function HomePage() {
       <FeaturesSection />
       <HowItWorksSection />
       <GlimpseIntoISLSection />
+      <CallToActionSection />
     </div>
   );
 }
