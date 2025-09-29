@@ -1,6 +1,5 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
 import { Waves, Zap, BrainCircuit, ArrowRight, Camera, BookOpen } from 'lucide-react';
 import Link from 'next/link';
 
@@ -18,11 +17,18 @@ function HeroSection() {
           <p className="mx-auto max-w-[700px] text-muted-foreground md:text-xl">
             Bridge the communication gap. Instantly translate Indian Sign Language gestures into text with the power of AI.
           </p>
-          <Button asChild size="lg" className="bg-gradient-to-r from-primary to-secondary text-white">
-            <Link href="/detect">
-              Start Detecting Now <ArrowRight className="ml-2 h-5 w-5" />
-            </Link>
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-4">
+            <Button asChild size="lg" className="bg-gradient-to-r from-primary to-secondary text-primary-foreground">
+              <Link href="/detect">
+                Start Detecting Now <ArrowRight className="ml-2 h-5 w-5" />
+              </Link>
+            </Button>
+            <Button asChild size="lg" variant="outline">
+              <Link href="/train">
+                Train Your Own <BrainCircuit className="ml-2 h-5 w-5" />
+              </Link>
+            </Button>
+          </div>
         </div>
       </div>
     </section>
@@ -51,10 +57,10 @@ function FeaturesSection() {
         <div className="text-center mb-12">
           <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl">Features</h2>
         </div>
-        <div className="mx-auto grid max-w-3xl items-start gap-8 sm:grid-cols-2">
+        <div className="mx-auto grid max-w-3xl items-stretch gap-8 sm:grid-cols-2">
           {features.map((feature, index) => (
-            <Link key={index} href={feature.link}>
-                <Card className="glass-card text-center h-full flex flex-col items-center justify-center p-6">
+            <Link key={index} href={feature.link} className="flex">
+                <Card className="glass-card text-center h-full flex flex-col items-center justify-center p-6 w-full">
                   <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 mb-4">
                     {feature.icon}
                   </div>
@@ -130,7 +136,7 @@ function GlimpseIntoISLSection() {
         <div className="text-center mb-12">
           <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl">A Glimpse into ISL</h2>
         </div>
-        <div className="mx-auto grid max-w-4xl grid-cols-2 items-start gap-8 sm:grid-cols-4">
+        <div className="mx-auto grid max-w-4xl grid-cols-2 items-stretch gap-8 sm:grid-cols-4">
           {gestures.map((gesture, index) => (
             <Card key={index} className="glass-card text-center flex flex-col items-center justify-center p-6 aspect-square">
               <div className="text-6xl mb-4">{gesture.emoji}</div>
@@ -155,10 +161,10 @@ function CallToActionSection() {
                 <p className="text-muted-foreground md:text-xl mb-8">
                 Experience seamless sign language detection and break down communication barriers today.
                 </p>
-                <Button asChild size="lg" className="bg-gradient-to-r from-primary to-secondary text-white">
-                <Link href="/detect">
-                    Go to Detector <ArrowRight className="ml-2 h-5 w-5" />
-                </Link>
+                <Button asChild size="lg" className="bg-gradient-to-r from-primary to-secondary text-primary-foreground">
+                  <Link href="/detect">
+                      Go to Detector <ArrowRight className="ml-2 h-5 w-5" />
+                  </Link>
                 </Button>
             </Card>
         </div>
@@ -169,12 +175,14 @@ function CallToActionSection() {
 
 export default function HomePage() {
   return (
-    <div className="bg-background text-foreground">
-      <HeroSection />
-      <FeaturesSection />
-      <HowItWorksSection />
-      <GlimpseIntoISLSection />
-      <CallToActionSection />
+    <div className="flex flex-col min-h-screen">
+      <main className="flex-1">
+        <HeroSection />
+        <FeaturesSection />
+        <HowItWorksSection />
+        <GlimpseIntoISLSection />
+        <CallToActionSection />
+      </main>
     </div>
   );
 }

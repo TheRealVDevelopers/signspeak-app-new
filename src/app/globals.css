@@ -78,30 +78,19 @@
   }
   body {
     @apply bg-background text-foreground;
-    background-size: 200% 200%;
-    animation: background-pan 15s ease-in-out infinite;
-  }
-}
-
-@keyframes background-pan {
-  0% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
+    background-color: hsl(var(--background));
+    background-image: radial-gradient(ellipse 80% 80% at 50% -20%,rgba(120,119,198,0.3),hsla(0,0%,100%,0));
   }
 }
 
 @layer components {
   .glass-card {
-    @apply bg-[rgba(30,30,30,0.8)] border border-[rgba(255,255,255,0.1)] shadow-[0_2px_10px_rgba(0,0,0,0.2)] transition-transform;
+    @apply bg-[rgba(30,30,40,0.6)] border border-[rgba(255,255,255,0.1)] shadow-[0_8px_32px_0_rgba(31,38,135,0.37)] transition-transform;
     backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
   }
 
   .glass-card:hover {
-    @apply scale-[1.01];
+    @apply scale-[1.02] border-[rgba(255,255,255,0.2)];
   }
 }
