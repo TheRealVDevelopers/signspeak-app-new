@@ -11,7 +11,9 @@ function HeroSection() {
           <div className="flex items-center gap-4">
             <Waves className="h-16 w-16 text-primary" />
             <h1 className="text-6xl md:text-7xl font-bold tracking-tighter">
-              SignSpeak
+              <span className="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+                SignSpeak
+              </span>
             </h1>
           </div>
           <p className="mx-auto max-w-[700px] text-muted-foreground md:text-xl lg:text-2xl">
