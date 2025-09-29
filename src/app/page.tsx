@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Waves, Zap, BrainCircuit, ArrowRight } from 'lucide-react';
+import { Waves, Zap, BrainCircuit, ArrowRight, Camera, BookOpen } from 'lucide-react';
 import Link from 'next/link';
 
 function HeroSection() {
@@ -73,18 +73,83 @@ function FeaturesSection() {
   );
 }
 
+function HowItWorksSection() {
+  const steps = [
+    {
+      icon: <Camera className="h-8 w-8 text-primary" />,
+      title: '1. Enable Camera',
+      description: 'Grant access to your webcam to get started.',
+    },
+    {
+      icon: <Zap className="h-8 w-8 text-accent" />,
+      title: '2. Make a Sign',
+      description: 'Position your hand clearly in the frame.',
+    },
+    {
+      icon: <BookOpen className="h-8 w-8 text-secondary" />,
+      title: '3. Get Translation',
+      description: 'Our AI instantly provides the text translation.',
+    },
+  ];
+
+  return (
+    <section id="how-it-works" className="w-full py-12 md:py-24 lg:py-32">
+      <div className="container px-4 md:px-6">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl">How It Works</h2>
+        </div>
+        <div className="mx-auto grid max-w-5xl items-start gap-12 sm:grid-cols-3">
+          {steps.map((step, index) => (
+            <div key={index} className="flex flex-col items-center text-center gap-4">
+              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary/10 border-2 border-primary/20">
+                {step.icon}
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-xl font-bold">{step.title}</h3>
+                <p className="text-muted-foreground">{step.description}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function GlimpseIntoISLSection() {
+  const gestures = [
+    { emoji: '👋', name: 'Hello' },
+    { emoji: '👍', name: 'Yes' },
+    { emoji: '👎', name: 'No' },
+    { emoji: '🙏', name: 'Thank You' },
+  ];
+
+  return (
+    <section id="glimpse" className="w-full py-12 md:py-24 lg:py-32">
+      <div className="container px-4 md:px-6">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl">A Glimpse into ISL</h2>
+        </div>
+        <div className="mx-auto grid max-w-4xl grid-cols-2 items-start gap-8 sm:grid-cols-4">
+          {gestures.map((gesture, index) => (
+            <Card key={index} className="glass-card text-center flex flex-col items-center justify-center p-6 aspect-square">
+              <div className="text-6xl mb-4">{gesture.emoji}</div>
+              <p className="font-semibold">{gesture.name}</p>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
 
 export default function HomePage() {
   return (
     <div className="bg-background text-foreground">
       <HeroSection />
       <FeaturesSection />
-       <section id="how-it-works" className="w-full py-12 md:py-24 lg:py-32">
-        <div className="container px-4 md:px-6 text-center">
-            <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl">How It Works</h2>
-            {/* Content for this section will be added later */}
-        </div>
-      </section>
+      <HowItWorksSection />
+      <GlimpseIntoISLSection />
     </div>
   );
 }
