@@ -25,6 +25,11 @@ function HeroSection() {
                 Start Detecting Now <ArrowRight className="ml-2 h-5 w-5" />
               </Link>
             </Button>
+            <Button asChild size="lg" variant="outline" className="px-10 py-6 text-lg border-primary text-primary hover:bg-primary/10 hover:text-primary">
+              <Link href="/train">
+                Train Your Own <BrainCircuit className="ml-2 h-5 w-5" />
+              </Link>
+            </Button>
           </div>
         </div>
       </div>
