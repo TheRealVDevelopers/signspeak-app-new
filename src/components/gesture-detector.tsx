@@ -154,6 +154,9 @@ export function GestureDetector() {
 
   const handleDetection = useCallback((landmarks: Landmark[]) => {
     if (landmarks.length === 0 || trainedGestures.length === 0 || !isDetecting) {
+      if(isDetecting === false){
+        setDetectionResult(null);
+      }
       return;
     }
 
@@ -196,9 +199,9 @@ export function GestureDetector() {
   }, [handleDetection]);
 
   return (
-    <div className="grid lg:grid-cols-3 gap-8">
+    <div className="grid lg:grid-cols-3 gap-8 p-4 md:p-6">
       <div className="lg:col-span-2 space-y-4">
-        <WebcamView onLandmarks={handleLandmarks} isCapturing={true} className="w-full aspect-video" />
+        <WebcamView onLandmarks={handleLandmarks} isCapturing={isDetecting} className="w-full aspect-video" />
          <Button onClick={() => setIsDetecting(!isDetecting)} size="lg" className="w-full" disabled={isLoading || trainedGestures.length === 0}>
           {isDetecting ? <><Square className="mr-2" />Stop Detection</> : <><Play className="mr-2" />Start Detection</>}
         </Button>
@@ -240,7 +243,7 @@ export function GestureDetector() {
             {detectionHistory.length > 0 ? (
               <ul className="space-y-2">
                 {detectionHistory.map((item, index) => (
-                  <li key={index} className={`p-3 rounded-md transition-all duration-300 ${index === 0 ? 'bg-primary/20 font-semibold' : 'bg-secondary'}`}>
+                  <li key={index} className={`p-3 rounded-md transition-all duration-300 ${index === 0 ? 'bg-primary/20 font-semibold' : 'bg-secondary/20'}`}>
                     {item}
                   </li>
                 ))}
