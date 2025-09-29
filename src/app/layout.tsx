@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { cn } from '@/lib/utils';
 import { Toaster } from '@/components/ui/toaster';
-import { Hand } from 'lucide-react';
+import { Waves } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 
@@ -28,16 +28,13 @@ export default function RootLayout({
         />
       </head>
       <body className={cn('min-h-screen bg-background font-sans antialiased')}>
-        <header className="flex items-center justify-between p-4 border-b">
+        <header className="flex items-center justify-between p-4 border-b border-transparent">
           <Link href="/" className="flex items-center gap-2">
-            <Hand className="h-7 w-7 text-primary" />
+            <Waves className="h-7 w-7 text-primary" />
             <span className="font-bold text-xl">SignSpeak</span>
           </Link>
-          <Button asChild>
-            <Link href="/train">Train Gestures</Link>
-          </Button>
         </header>
-        <main className="p-4 md:p-8">{children}</main>
+        <main>{children}</main>
         <Toaster />
       </body>
     </html>
