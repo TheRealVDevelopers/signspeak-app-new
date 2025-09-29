@@ -23,11 +23,6 @@ function HeroSection() {
                 Start Detecting Now <ArrowRight className="ml-2 h-5 w-5" />
               </Link>
             </Button>
-            <Button asChild size="lg" variant="outline">
-              <Link href="/train">
-                Train Your Own <BrainCircuit className="ml-2 h-5 w-5" />
-              </Link>
-            </Button>
           </div>
         </div>
       </div>
@@ -175,14 +170,12 @@ function CallToActionSection() {
 
 export default function HomePage() {
   return (
-    <div className="flex flex-col min-h-screen">
-      <main className="flex-1">
-        <HeroSection />
-        <FeaturesSection />
-        <HowItWorksSection />
-        <GlimpseIntoISLSection />
-        <CallToActionSection />
-      </main>
-    </div>
+    <main className="flex-1">
+      <HeroSection />
+      <FeaturesSection />
+      <HowItWorksSection />
+      <GlimpseIntoISLSection />
+      <CallToActionSection />
+    </main>
   );
 }
