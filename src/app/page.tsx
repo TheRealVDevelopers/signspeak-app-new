@@ -5,7 +5,7 @@ import Link from 'next/link';
 
 function HeroSection() {
   return (
-    <section className="w-full py-20 md:py-24 lg:py-28 text-center">
+    <section className="w-full py-12 md:py-16 text-center">
       <div className="container px-4 md:px-6">
         <div className="flex flex-col items-center space-y-6">
           <div className="flex items-center gap-4">
@@ -54,7 +54,7 @@ function FeaturesSection() {
   ];
 
   return (
-    <section id="features" className="w-full py-8">
+    <section id="features" className="w-full py-12 md:py-16">
       <div className="container px-4 md:px-6">
         <div className="text-center mb-12">
           <h2 className="text-4xl font-bold tracking-tighter sm:text-5xl md:text-6xl">Features</h2>
@@ -101,7 +101,7 @@ function HowItWorksSection() {
   ];
 
   return (
-    <section id="how-it-works" className="w-full py-12">
+    <section id="how-it-works" className="w-full py-12 md:py-16">
       <div className="container px-4 md:px-6">
         <div className="text-center mb-12">
           <h2 className="text-4xl font-bold tracking-tighter sm:text-5xl md:text-6xl">How It Works</h2>
@@ -133,7 +133,7 @@ function GlimpseIntoISLSection() {
   ];
 
   return (
-    <section id="glimpse" className="w-full py-12">
+    <section id="glimpse" className="w-full py-12 md:py-16">
       <div className="container px-4 md:px-6">
         <div className="text-center mb-12">
           <h2 className="text-4xl font-bold tracking-tighter sm:text-5xl md:text-6xl">A Glimpse into ISL</h2>
@@ -153,7 +153,7 @@ function GlimpseIntoISLSection() {
 
 function CallToActionSection() {
   return (
-    <section id="cta" className="w-full py-12">
+    <section id="cta" className="w-full py-12 md:py-16">
       <div className="container px-4 md:px-6">
         <div className="mx-auto max-w-4xl text-center">
             <Card className="glass-card p-10 md:p-16 flex flex-col items-center">
