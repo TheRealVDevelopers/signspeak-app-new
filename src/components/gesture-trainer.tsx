@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { useGestures } from '@/hooks/use-gestures';
-import type { Landmark, LandmarkData } from '@/lib/types';
+import type { Landmark, LandmarkData, Gesture } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { WebcamView } from './webcam-view';
 import { Button } from './ui/button';
@@ -10,12 +10,15 @@ import { Input } from './ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './ui/card';
 import { Progress } from './ui/progress';
 import { ScrollArea } from './ui/scroll-area';
-import { Camera, Trash2, Loader2, CheckCircle, ArrowRight, X } from 'lucide-react';
+import { Camera, Trash2, Loader2, CheckCircle, ArrowRight, X, Book, MessageSquare, BookOpen, ChevronsRight, ChevronsLeft } from 'lucide-react';
 import { validateGesture } from '@/ai/flows/gesture-validation-tool';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { useRouter } from 'next/navigation';
 import { Skeleton } from './ui/skeleton';
 import { Textarea } from './ui/textarea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { sentenceDB } from '@/lib/db';
+import { Label } from './ui/label';
 
 const SAMPLES_REQUIRED = 30; // Increased for better accuracy
 
@@ -54,21 +57,11 @@ function normalizeLandmarks(landmarks: Landmark[]): Landmark[] {
 }
 
 
-export function GestureTrainer() {
-  const router = useRouter();
-  const { gestures, addGesture, deleteGesture, isLoading: isGesturesLoading } = useGestures();
+function WordTrainer({ gestures, addGesture, isSaving, setIsSaving, onIsCapturingChange, lastLandmarks, isCapturing }) {
   const [gestureName, setGestureName] = useState('');
   const [gestureDescription, setGestureDescription] = useState('');
   const [capturedSamples, setCapturedSamples] = useState<LandmarkData[]>([]);
-  const [isCapturing, setIsCapturing] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [lastLandmarks, setLastLandmarks] = useState<LandmarkData>([]);
   const { toast } = useToast();
-
-  const handleLandmarks = useCallback((landmarks: Landmark[], worldLandmarks: Landmark[]) => {
-    // Using world landmarks for pose-invariance
-    setLastLandmarks(worldLandmarks);
-  }, []);
 
   const handleCapture = () => {
     if (lastLandmarks.length === 0) {
@@ -83,11 +76,11 @@ export function GestureTrainer() {
       setCapturedSamples(prev => [...prev, lastLandmarks]);
     }
   };
-  
+
   const handleDeleteSample = (index: number) => {
     setCapturedSamples(prev => prev.filter((_, i) => i !== index));
   };
-
+  
   const handleSaveGesture = async () => {
     if (gestureName.trim() === '') {
       toast({ variant: 'destructive', title: 'Error', description: 'Please enter a name for the gesture.' });
@@ -105,7 +98,7 @@ export function GestureTrainer() {
     setIsSaving(true);
 
     const normalizedSamples = capturedSamples.map(sample => normalizeLandmarks(sample));
-    const newGesture = { label: gestureName, description: gestureDescription, samples: normalizedSamples };
+    const newGesture: Gesture = { label: gestureName, description: gestureDescription, samples: normalizedSamples, type: 'word' };
     
     const landmarkDataForValidation = newGesture.samples.map(sample => sample.flatMap(lm => [lm.x, lm.y, lm.z]));
     const trainedLandmarksForValidation = gestures.reduce((acc, g) => {
@@ -144,86 +137,225 @@ export function GestureTrainer() {
     }
   };
 
-  const startCapturing = () => setIsCapturing(true);
+  useEffect(() => {
+    onIsCapturingChange(true);
+  }, [onIsCapturingChange]);
 
   const progress = (capturedSamples.length / SAMPLES_REQUIRED) * 100;
-  
-  useEffect(() => {
-    if(!isCapturing) {
-        startCapturing();
+
+  return (
+    <CardContent className="space-y-4 pt-6">
+      <div className="space-y-2">
+        <Input
+          placeholder="Enter word (e.g., Hello)"
+          value={gestureName}
+          onChange={(e) => setGestureName(e.target.value)}
+          disabled={isSaving || !isCapturing}
+        />
+         <Textarea
+          placeholder="Describe how to make the gesture..."
+          value={gestureDescription}
+          onChange={(e) => setGestureDescription(e.target.value)}
+          disabled={isSaving || !isCapturing}
+        />
+        <div className="flex items-center gap-4">
+          <Button onClick={handleCapture} disabled={!isCapturing || capturedSamples.length >= SAMPLES_REQUIRED || isSaving || !gestureName} className="flex-1">
+            <Camera className="mr-2" /> Capture Sample
+          </Button>
+          <Progress value={progress} className="w-1/2" />
+          <span className="text-sm text-muted-foreground">{capturedSamples.length}/{SAMPLES_REQUIRED}</span>
+        </div>
+      </div>
+
+      {capturedSamples.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-medium">Captured Samples</h3>
+          <ScrollArea className="h-24">
+            <div className="grid grid-cols-5 gap-2 pr-4">
+              {capturedSamples.map((sample, index) => (
+                <div key={index} className="relative group aspect-square bg-muted rounded-md flex items-center justify-center">
+                   <span className="text-xs text-muted-foreground">{index + 1}</span>
+                   <Button
+                    variant="destructive"
+                    size="icon"
+                    className="absolute -top-2 -right-2 h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={() => handleDeleteSample(index)}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        </div>
+      )}
+      
+      {capturedSamples.length >= SAMPLES_REQUIRED && (
+        <Alert className="border-primary bg-primary/10">
+          <CheckCircle className="h-4 w-4 text-primary" />
+          <AlertTitle>Ready to Save!</AlertTitle>
+          <AlertDescription>
+            You have captured enough samples. Click "Save Gesture" to train the model.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <Button onClick={handleSaveGesture} disabled={capturedSamples.length < SAMPLES_REQUIRED || isSaving || !isCapturing || !gestureName} className="w-full" size="lg">
+        {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+        Save Gesture
+      </Button>
+    </CardContent>
+  )
+}
+
+function SentenceTrainer({ gestures, onIsCapturingChange, lastLandmarks, isCapturing }) {
+    const { toast } = useToast();
+    const [sentenceLabel, setSentenceLabel] = useState('');
+    const [numberOfGestures, setNumberOfGestures] = useState(1);
+    const [currentStep, setCurrentStep] = useState(0); // 0: setup, 1...n: capturing gesture n
+    const [isSaving, setIsSaving] = useState(false);
+
+    const startTraining = () => {
+        if (sentenceLabel.trim() === '') {
+            toast({ variant: 'destructive', title: 'Error', description: 'Please enter a label for the sentence.' });
+            return;
+        }
+        if (numberOfGestures <= 0) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Number of gestures must be greater than zero.' });
+            return;
+        }
+        setCurrentStep(1);
     }
-  }, [isCapturing]);
+    
+    const resetTraining = () => {
+        setSentenceLabel('');
+        setNumberOfGestures(1);
+        setCurrentStep(0);
+    }
+
+    if (currentStep > 0) {
+        return (
+            <CardContent className="space-y-4 pt-6">
+                <div className="text-center">
+                    <p className="text-sm text-muted-foreground">Training Sentence:</p>
+                    <p className="font-bold text-lg">{sentenceLabel}</p>
+                </div>
+                <div className="flex items-center justify-between">
+                    <Button variant="ghost" size="icon" disabled={currentStep <= 1} onClick={() => setCurrentStep(s => s - 1)}>
+                        <ChevronsLeft />
+                    </Button>
+                    <div className="flex-1 text-center">
+                        <p className="text-sm text-muted-foreground">Gesture {currentStep} of {numberOfGestures}</p>
+                        <Progress value={(currentStep / numberOfGestures) * 100} className="mt-2" />
+                    </div>
+                    <Button variant="ghost" size="icon" disabled={currentStep >= numberOfGestures} onClick={() => setCurrentStep(s => s + 1)}>
+                        <ChevronsRight />
+                    </Button>
+                </div>
+                
+                <Alert>
+                    <BookOpen className="h-4 w-4" />
+                    <AlertTitle>Capturing Gesture {currentStep}</AlertTitle>
+                    <AlertDescription>
+                        This part is under construction. In the next step, you will be able to capture samples for this gesture.
+                    </AlertDescription>
+                </Alert>
+
+                <div className="flex gap-2">
+                    <Button onClick={() => {}} className="w-full" disabled>
+                        {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        Complete Sentence
+                    </Button>
+                    <Button variant="outline" onClick={resetTraining}>Cancel</Button>
+                </div>
+
+            </CardContent>
+        );
+    }
+
+    return (
+        <CardContent className="space-y-4 pt-6">
+            <div className="space-y-2">
+                <Label htmlFor="sentence-label">Sentence Label</Label>
+                <Input
+                    id="sentence-label"
+                    placeholder="e.g., How are you?"
+                    value={sentenceLabel}
+                    onChange={(e) => setSentenceLabel(e.target.value)}
+                />
+            </div>
+             <div className="space-y-2">
+                <Label htmlFor="sentence-gestures">Number of Gestures</Label>
+                 <Input
+                    id="sentence-gestures"
+                    type="number"
+                    min="1"
+                    value={numberOfGestures}
+                    onChange={(e) => setNumberOfGestures(parseInt(e.target.value, 10) || 1)}
+                />
+            </div>
+            <Button className="w-full" onClick={startTraining} disabled={!sentenceLabel.trim() || numberOfGestures <= 0}>
+                Start Sentence Training <ArrowRight className="ml-2"/>
+            </Button>
+            <Alert variant="destructive">
+              <AlertTitle>Under Construction</AlertTitle>
+              <AlertDescription>
+                Full sentence training and detection is not yet implemented. This is a preview of the setup process.
+              </AlertDescription>
+            </Alert>
+        </CardContent>
+    )
+}
+
+export function GestureTrainer() {
+  const router = useRouter();
+  const { gestures, addGesture, deleteGesture, isLoading: isGesturesLoading } = useGestures();
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastLandmarks, setLastLandmarks] = useState<LandmarkData>([]);
+  const [activeTab, setActiveTab] = useState("word");
+
+
+  const handleLandmarks = useCallback((landmarks: Landmark[], worldLandmarks: Landmark[]) => {
+    setLastLandmarks(worldLandmarks);
+  }, []);
+
+  useEffect(() => {
+    setIsCapturing(true);
+  }, []);
 
   return (
     <div className="grid lg:grid-cols-2 gap-8">
       <Card className="glass-card">
         <CardHeader>
           <CardTitle className="text-2xl">Train New Gesture</CardTitle>
-          <CardDescription>Capture {SAMPLES_REQUIRED} samples of a gesture for the AI to learn.</CardDescription>
+          <CardDescription>Capture samples of a gesture or sentence for the AI to learn.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <WebcamView onLandmarks={handleLandmarks} isCapturing={isCapturing} className="w-full aspect-video" />
-          
-          <div className="space-y-2 pt-4">
-            <Input
-              placeholder="Enter word (e.g., Hello)"
-              value={gestureName}
-              onChange={(e) => setGestureName(e.target.value)}
-              disabled={isSaving || !isCapturing}
-            />
-             <Textarea
-              placeholder="Describe how to make the gesture..."
-              value={gestureDescription}
-              onChange={(e) => setGestureDescription(e.target.value)}
-              disabled={isSaving || !isCapturing}
-            />
-            <div className="flex items-center gap-4">
-              <Button onClick={handleCapture} disabled={!isCapturing || capturedSamples.length >= SAMPLES_REQUIRED || isSaving || !gestureName} className="flex-1">
-                <Camera className="mr-2" /> Capture Sample
-              </Button>
-              <Progress value={progress} className="w-1/2" />
-              <span className="text-sm text-muted-foreground">{capturedSamples.length}/{SAMPLES_REQUIRED}</span>
-            </div>
-          </div>
+        <CardContent>
+        <WebcamView onLandmarks={handleLandmarks} isCapturing={isCapturing} className="w-full aspect-video" />
 
-          {capturedSamples.length > 0 && (
-            <div className="space-y-2">
-              <h3 className="text-sm font-medium">Captured Samples</h3>
-              <ScrollArea className="h-24">
-                <div className="grid grid-cols-5 gap-2 pr-4">
-                  {capturedSamples.map((sample, index) => (
-                    <div key={index} className="relative group aspect-square bg-muted rounded-md flex items-center justify-center">
-                       <span className="text-xs text-muted-foreground">{index + 1}</span>
-                       <Button
-                        variant="destructive"
-                        size="icon"
-                        className="absolute -top-2 -right-2 h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={() => handleDeleteSample(index)}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
-            </div>
-          )}
-          
-          {capturedSamples.length >= SAMPLES_REQUIRED && (
-            <Alert className="border-primary bg-primary/10">
-              <CheckCircle className="h-4 w-4 text-primary" />
-              <AlertTitle>Ready to Save!</AlertTitle>
-              <AlertDescription>
-                You have captured enough samples. Click "Save Gesture" to train the model.
-              </AlertDescription>
-            </Alert>
-          )}
-
-          <Button onClick={handleSaveGesture} disabled={capturedSamples.length < SAMPLES_REQUIRED || isSaving || !isCapturing || !gestureName} className="w-full" size="lg">
-            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Save Gesture
-          </Button>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full mt-4">
+            <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="word"><Book className="mr-2"/> Word</TabsTrigger>
+                <TabsTrigger value="sentence"><MessageSquare className="mr-2"/> Sentence</TabsTrigger>
+            </TabsList>
+            <TabsContent value="word">
+                <WordTrainer 
+                    gestures={gestures} 
+                    addGesture={addGesture} 
+                    isSaving={isSaving} 
+                    setIsSaving={setIsSaving}
+                    onIsCapturingChange={setIsCapturing}
+                    lastLandmarks={lastLandmarks}
+                    isCapturing={isCapturing}
+                />
+            </TabsContent>
+            <TabsContent value="sentence">
+                <SentenceTrainer gestures={gestures} onIsCapturingChange={setIsCapturing} lastLandmarks={lastLandmarks} isCapturing={isCapturing} />
+            </TabsContent>
+        </Tabs>
         </CardContent>
+
       </Card>
       
       <div className="space-y-8">

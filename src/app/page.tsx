@@ -5,7 +5,7 @@ import Link from 'next/link';
 
 function HeroSection() {
   return (
-    <section className="w-full py-24 md:py-32 lg:py-40 text-center">
+    <section className="w-full pt-12 md:pt-16 pb-0 text-center">
       <div className="container px-4 md:px-6">
         <div className="flex flex-col items-center space-y-6">
           <div className="flex items-center gap-4">
@@ -54,9 +54,9 @@ function FeaturesSection() {
   ];
 
   return (
-    <section id="features" className="w-full py-12 md:py-24 lg:py-32">
+    <section id="features" className="w-full pt-8 pb-12 md:py-16">
       <div className="container px-4 md:px-6">
-        <div className="text-center mb-16">
+        <div className="text-center mb-12">
           <h2 className="text-4xl font-bold tracking-tighter sm:text-5xl md:text-6xl">Features</h2>
         </div>
         <div className="mx-auto grid max-w-4xl items-stretch gap-10 sm:grid-cols-2">
@@ -101,9 +101,9 @@ function HowItWorksSection() {
   ];
 
   return (
-    <section id="how-it-works" className="w-full py-12 md:py-24 lg:py-32">
+    <section id="how-it-works" className="w-full py-12 md:py-16">
       <div className="container px-4 md:px-6">
-        <div className="text-center mb-16">
+        <div className="text-center mb-12">
           <h2 className="text-4xl font-bold tracking-tighter sm:text-5xl md:text-6xl">How It Works</h2>
         </div>
         <div className="mx-auto grid max-w-5xl items-start gap-14 sm:grid-cols-3">
@@ -133,9 +133,9 @@ function GlimpseIntoISLSection() {
   ];
 
   return (
-    <section id="glimpse" className="w-full py-12 md:py-24 lg:py-32">
+    <section id="glimpse" className="w-full py-12 md:py-16">
       <div className="container px-4 md:px-6">
-        <div className="text-center mb-16">
+        <div className="text-center mb-12">
           <h2 className="text-4xl font-bold tracking-tighter sm:text-5xl md:text-6xl">A Glimpse into ISL</h2>
         </div>
         <div className="mx-auto grid max-w-5xl grid-cols-2 items-stretch gap-10 sm:grid-cols-4">
@@ -153,7 +153,7 @@ function GlimpseIntoISLSection() {
 
 function CallToActionSection() {
   return (
-    <section id="cta" className="w-full py-12 md:py-24 lg:py-32">
+    <section id="cta" className="w-full py-12 md:py-16">
       <div className="container px-4 md:px-6">
         <div className="mx-auto max-w-4xl text-center">
             <Card className="glass-card p-10 md:p-16 flex flex-col items-center">
