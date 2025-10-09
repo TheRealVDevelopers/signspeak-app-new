@@ -10,13 +10,15 @@ import { Input } from './ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './ui/card';
 import { Progress } from './ui/progress';
 import { ScrollArea } from './ui/scroll-area';
-import { Camera, Trash2, Loader2, CheckCircle, ArrowRight, X, Book, MessageSquare, BookOpen } from 'lucide-react';
+import { Camera, Trash2, Loader2, CheckCircle, ArrowRight, X, Book, MessageSquare, BookOpen, ChevronsRight, ChevronsLeft } from 'lucide-react';
 import { validateGesture } from '@/ai/flows/gesture-validation-tool';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { useRouter } from 'next/navigation';
 import { Skeleton } from './ui/skeleton';
 import { Textarea } from './ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { sentenceDB } from '@/lib/db';
+import { Label } from './ui/label';
 
 const SAMPLES_REQUIRED = 30; // Increased for better accuracy
 
@@ -206,22 +208,99 @@ function WordTrainer({ gestures, addGesture, isSaving, setIsSaving, onIsCapturin
   )
 }
 
-function SentenceTrainer({ gestures, onIsCapturingChange }) {
-    const [sentence, setSentence] = useState('');
+function SentenceTrainer({ gestures, onIsCapturingChange, lastLandmarks, isCapturing }) {
+    const { toast } = useToast();
+    const [sentenceLabel, setSentenceLabel] = useState('');
+    const [numberOfGestures, setNumberOfGestures] = useState(1);
+    const [currentStep, setCurrentStep] = useState(0); // 0: setup, 1...n: capturing gesture n
+    const [isSaving, setIsSaving] = useState(false);
+
+    const startTraining = () => {
+        if (sentenceLabel.trim() === '') {
+            toast({ variant: 'destructive', title: 'Error', description: 'Please enter a label for the sentence.' });
+            return;
+        }
+        if (numberOfGestures <= 0) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Number of gestures must be greater than zero.' });
+            return;
+        }
+        setCurrentStep(1);
+    }
+    
+    const resetTraining = () => {
+        setSentenceLabel('');
+        setNumberOfGestures(1);
+        setCurrentStep(0);
+    }
+
+    if (currentStep > 0) {
+        return (
+            <CardContent className="space-y-4 pt-6">
+                <div className="text-center">
+                    <p className="text-sm text-muted-foreground">Training Sentence:</p>
+                    <p className="font-bold text-lg">{sentenceLabel}</p>
+                </div>
+                <div className="flex items-center justify-between">
+                    <Button variant="ghost" size="icon" disabled={currentStep <= 1} onClick={() => setCurrentStep(s => s - 1)}>
+                        <ChevronsLeft />
+                    </Button>
+                    <div className="flex-1 text-center">
+                        <p className="text-sm text-muted-foreground">Gesture {currentStep} of {numberOfGestures}</p>
+                        <Progress value={(currentStep / numberOfGestures) * 100} className="mt-2" />
+                    </div>
+                    <Button variant="ghost" size="icon" disabled={currentStep >= numberOfGestures} onClick={() => setCurrentStep(s => s + 1)}>
+                        <ChevronsRight />
+                    </Button>
+                </div>
+                
+                <Alert>
+                    <BookOpen className="h-4 w-4" />
+                    <AlertTitle>Capturing Gesture {currentStep}</AlertTitle>
+                    <AlertDescription>
+                        This part is under construction. In the next step, you will be able to capture samples for this gesture.
+                    </AlertDescription>
+                </Alert>
+
+                <div className="flex gap-2">
+                    <Button onClick={() => {}} className="w-full" disabled>
+                        {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        Complete Sentence
+                    </Button>
+                    <Button variant="outline" onClick={resetTraining}>Cancel</Button>
+                </div>
+
+            </CardContent>
+        );
+    }
+
     return (
         <CardContent className="space-y-4 pt-6">
             <div className="space-y-2">
-                <Textarea
-                    placeholder="Enter a sentence to train (e.g., How are you)"
-                    value={sentence}
-                    onChange={(e) => setSentence(e.target.value)}
+                <Label htmlFor="sentence-label">Sentence Label</Label>
+                <Input
+                    id="sentence-label"
+                    placeholder="e.g., How are you?"
+                    value={sentenceLabel}
+                    onChange={(e) => setSentenceLabel(e.target.value)}
                 />
-                <Button className="w-full" disabled={!sentence.trim()}>Start Sentence Training</Button>
             </div>
+             <div className="space-y-2">
+                <Label htmlFor="sentence-gestures">Number of Gestures</Label>
+                 <Input
+                    id="sentence-gestures"
+                    type="number"
+                    min="1"
+                    value={numberOfGestures}
+                    onChange={(e) => setNumberOfGestures(parseInt(e.target.value, 10) || 1)}
+                />
+            </div>
+            <Button className="w-full" onClick={startTraining} disabled={!sentenceLabel.trim() || numberOfGestures <= 0}>
+                Start Sentence Training <ArrowRight className="ml-2"/>
+            </Button>
             <Alert variant="destructive">
               <AlertTitle>Under Construction</AlertTitle>
               <AlertDescription>
-                Sentence training is not yet implemented. Please check back later.
+                Full sentence training and detection is not yet implemented. This is a preview of the setup process.
               </AlertDescription>
             </Alert>
         </CardContent>
@@ -272,7 +351,7 @@ export function GestureTrainer() {
                 />
             </TabsContent>
             <TabsContent value="sentence">
-                <SentenceTrainer gestures={gestures} onIsCapturingChange={setIsCapturing} />
+                <SentenceTrainer gestures={gestures} onIsCapturingChange={setIsCapturing} lastLandmarks={lastLandmarks} isCapturing={isCapturing} />
             </TabsContent>
         </Tabs>
         </CardContent>
