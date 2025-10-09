@@ -1,5 +1,3 @@
-'use server';
-
 /**
  * @fileOverview Implements multi-frame verification for gesture detection.
  *
@@ -8,8 +6,7 @@
  * - MultiFrameVerificationOutput - The return type for the verifyMultiFrameConsistency function.
  */
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import {z} from 'zod';
 
 const MultiFrameVerificationInputSchema = z.object({
   detectedGestures: z
@@ -47,43 +44,32 @@ export type MultiFrameVerificationOutput = z.infer<
 export async function verifyMultiFrameConsistency(
   input: MultiFrameVerificationInput
 ): Promise<MultiFrameVerificationOutput> {
-  return multiFrameVerificationFlow(input);
-}
+  const {detectedGestures, requiredConsistency} = input;
 
-const multiFrameVerificationFlow = ai.defineFlow(
-  {
-    name: 'multiFrameVerificationFlow',
-    inputSchema: MultiFrameVerificationInputSchema,
-    outputSchema: MultiFrameVerificationOutputSchema,
-  },
-  async input => {
-    const {detectedGestures, requiredConsistency} = input;
-
-    if (detectedGestures.length < requiredConsistency) {
-      return {
-        isValidGesture: false,
-        consistentGesture: undefined,
-      };
-    }
-
-    let consistentGesture: string | undefined = undefined;
-    let isValidGesture = false;
-
-    // Check for consistent gestures across the required number of frames
-    for (let i = 0; i <= detectedGestures.length - requiredConsistency; i++) {
-      const subArray = detectedGestures.slice(i, i + requiredConsistency);
-      const allEqual = subArray.every(val => val === subArray[0]);
-
-      if (allEqual) {
-        consistentGesture = subArray[0];
-        isValidGesture = true;
-        break;
-      }
-    }
-
+  if (detectedGestures.length < requiredConsistency) {
     return {
-      isValidGesture: isValidGesture,
-      consistentGesture: consistentGesture,
+      isValidGesture: false,
+      consistentGesture: undefined,
     };
   }
-);
+
+  let consistentGesture: string | undefined = undefined;
+  let isValidGesture = false;
+
+  // Check for consistent gestures across the required number of frames
+  for (let i = 0; i <= detectedGestures.length - requiredConsistency; i++) {
+    const subArray = detectedGestures.slice(i, i + requiredConsistency);
+    const allEqual = subArray.every(val => val === subArray[0]);
+
+    if (allEqual) {
+      consistentGesture = subArray[0];
+      isValidGesture = true;
+      break;
+    }
+  }
+
+  return {
+    isValidGesture: isValidGesture,
+    consistentGesture: consistentGesture,
+  };
+}
