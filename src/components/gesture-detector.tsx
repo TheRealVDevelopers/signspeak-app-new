@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
@@ -17,6 +16,7 @@ const CONFIDENCE_THRESHOLD = 0.8;
 const SEQUENCE_TIMEOUT_MS = 7000;
 const DETECTION_INTERVAL_MS = 100;
 const SENTENCE_COOLDOWN_MS = 3000; // Cooldown period after sentence detection
+const WORD_COOLDOWN_MS = 1500; // Cooldown between single word detections
 
 function normalizeLandmarks(landmarks: Landmark[]): Landmark[] {
     if (landmarks.length === 0) return [];
@@ -155,11 +155,17 @@ export function GestureDetector() {
         return;
     }
 
+    // Cooldown check for single word detection
+    if (lastRecognizedWordRef.current && now - lastRecognizedWordRef.current.timestamp < WORD_COOLDOWN_MS) {
+        return;
+    }
+
     const combinedGestureSet = [...trainedWords, ...allTrainedGestures].filter(Boolean);
     const knnResult = kNearestNeighbors(landmarks, combinedGestureSet, 3);
     
     if (knnResult.confidence > CONFIDENCE_THRESHOLD && knnResult.label !== 'Unknown') {
-        if (lastRecognizedWordRef.current?.label === knnResult.label && now - lastRecognizedWordRef.current.timestamp < 1000) {
+        // Prevent re-detection of the exact same word label too quickly
+        if (lastRecognizedWordRef.current?.label === knnResult.label && now - lastRecognizedWordRef.current.timestamp < WORD_COOLDOWN_MS) {
             return;
         }
 
@@ -180,10 +186,10 @@ export function GestureDetector() {
                 
                 if (isMatch) {
                     setSentenceResult(sentence.label);
-                    setWordResult(null);
+                    setWordResult(null); // Clear word result when sentence is found
                     resetSequence();
                     sentenceCooldownEndRef.current = Date.now() + SENTENCE_COOLDOWN_MS;
-                    return;
+                    return; // Exit after finding a sentence
                 }
             }
         }
@@ -303,3 +309,5 @@ export function GestureDetector() {
     </div>
   );
 }
+
+    
