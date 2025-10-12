@@ -1,3 +1,4 @@
+
 import type { DBSchema, IDBPDatabase } from 'idb';
 import { openDB } from 'idb';
 import type { Gesture, Sentence } from '@/lib/types';
@@ -99,29 +100,24 @@ export const sentenceDB = {
         const gestureStore = tx.objectStore(GESTURE_STORE_NAME);
         const sentenceStore = tx.objectStore(SENTENCE_STORE_NAME);
 
-        // This function will be executed as part of the transaction
-        const transactionLogic = async () => {
-            const allGestures = await gestureStore.getAll();
-            const existingGestureLabels = new Set(allGestures.map(g => g.label.toLowerCase()));
-            
-            for (const gesture of sentence.gestures) {
-                if (!existingGestureLabels.has(gesture.label.toLowerCase())) {
-                    const newWordGesture: Gesture = {
-                        label: gesture.label,
-                        description: `Gesture for "${gesture.label}" from sentence "${sentence.label}"`,
-                        samples: gesture.samples,
-                        type: 'word'
-                    };
-                    await gestureStore.put(newWordGesture);
-                    existingGestureLabels.add(gesture.label.toLowerCase()); // Add to set to avoid re-adding
-                }
+        const allWordsInDB = await gestureStore.getAll();
+        const existingWordLabels = new Set(allWordsInDB.map(g => g.label.toLowerCase()));
+
+        for (const gesture of sentence.gestures) {
+            if (!existingWordLabels.has(gesture.label.toLowerCase())) {
+                const newWordGesture: Gesture = {
+                    label: gesture.label,
+                    description: `Gesture for "${gesture.label}" from sentence "${sentence.label}"`,
+                    samples: gesture.samples,
+                    type: 'word'
+                };
+                await gestureStore.put(newWordGesture);
+                existingWordLabels.add(gesture.label.toLowerCase());
             }
+        }
 
-            await sentenceStore.put(sentence);
-        };
-
-        // Execute the transaction and wait for it to complete
-        await Promise.all([transactionLogic(), tx.done]);
+        await sentenceStore.put(sentence);
+        return tx.done;
     },
     async delete(label: string) {
       const db = await getDB();
