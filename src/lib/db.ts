@@ -4,7 +4,7 @@ import { openDB } from 'idb';
 import type { Gesture, Sentence } from '@/lib/types';
 
 const DB_NAME = 'SignSpeakDB';
-const DB_VERSION = 2; // Incremented version
+const DB_VERSION = 3; // Incremented version
 const GESTURE_STORE_NAME = 'gestures';
 const SENTENCE_STORE_NAME = 'sentences';
 
