@@ -3,7 +3,7 @@ import { openDB } from 'idb';
 import type { Gesture, Sentence } from '@/lib/types';
 
 const DB_NAME = 'SignSpeakDB';
-const DB_VERSION = 2; // Incremented version for schema change
+const DB_VERSION = 3; // Incremented version for new sentence structure
 const GESTURE_STORE_NAME = 'gestures';
 const SENTENCE_STORE_NAME = 'sentences';
 
@@ -47,6 +47,13 @@ const getDB = () => {
                 db.createObjectStore(SENTENCE_STORE_NAME, { keyPath: 'label' });
             }
         }
+        if (oldVersion < 3) {
+            // Re-create sentence store for new data structure
+            if (db.objectStoreNames.contains(SENTENCE_STORE_NAME)) {
+                db.deleteObjectStore(SENTENCE_STORE_NAME);
+            }
+            db.createObjectStore(SENTENCE_STORE_NAME, { keyPath: 'label' });
+        }
       },
     });
   }
@@ -60,11 +67,14 @@ export const gestureDB = {
   },
   async getAll() {
     const db = await getDB();
-    return db.getAll(GESTURE_STORE_NAME);
+    // Ensure we only return items with type 'word' for backward compatibility
+    const allItems = await db.getAll(GESTURE_STORE_NAME);
+    return allItems.filter(item => item.type === 'word');
   },
   async add(gesture: Gesture) {
     const db = await getDB();
-    const gestureWithType = { ...gesture, type: gesture.type || 'word' as const };
+    // Enforce type is 'word'
+    const gestureWithType = { ...gesture, type: 'word' as const };
     return db.put(GESTURE_STORE_NAME, gestureWithType);
   },
   async delete(label: string) {

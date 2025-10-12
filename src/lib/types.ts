@@ -1,3 +1,4 @@
+
 export interface Landmark {
   x: number;
   y: number;
@@ -11,11 +12,10 @@ export interface Gesture {
   label: string;
   description: string;
   samples: LandmarkData[];
-  // type is optional for backward compatibility
-  type?: 'word' | 'sentence-part';
+  type: 'word';
 }
 
 export interface Sentence {
   label: string; // The full sentence text
-  sequence: Gesture[]; // Array of gesture objects, one for each word/part
+  samples: LandmarkData[][]; // An array of samples. Each sample is an array of gestures (LandmarkData).
 }

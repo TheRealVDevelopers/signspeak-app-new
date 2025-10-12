@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -20,10 +21,10 @@ export function useGestures() {
   }, [refreshGestures]);
 
   const addGesture = async (gesture: Gesture) => {
-    // Ensure description is always a string
     const gestureWithDescription = {
       ...gesture,
       description: gesture.description || '',
+      type: 'word' as const, // Ensure type is always word
     };
     await gestureDB.add(gestureWithDescription);
     await refreshGestures();
