@@ -197,7 +197,7 @@ function WordTrainer({ gestures, addGesture, isSaving, setIsSaving, onIsCapturin
   )
 }
 
-function SentenceGestureCapturer({ gestureName, onCaptureComplete, lastLandmarks, isCapturing }) {
+function SentenceGestureCapturer({ gestureName, onCaptureComplete, lastLandmarks, isCapturing, gestures, sentences }) {
     const [capturedSamples, setCapturedSamples] = useState<LandmarkData[]>([]);
     const [isSaving, setIsSaving] = useState(false);
     const { toast } = useToast();
@@ -216,6 +216,22 @@ function SentenceGestureCapturer({ gestureName, onCaptureComplete, lastLandmarks
         if (capturedSamples.length < WORD_SAMPLES_REQUIRED) {
             toast({ variant: 'destructive', title: 'Error', description: `Please capture ${WORD_SAMPLES_REQUIRED} samples.` });
             return;
+        }
+        
+        const existingGesture = gestures.find(g => g.label.toLowerCase() === gestureName.toLowerCase());
+        const allSentenceGestures = sentences.flatMap(s => s.gestures);
+        const existingInSentence = allSentenceGestures.find(g => g.label.toLowerCase() === gestureName.toLowerCase());
+
+        if (existingGesture || existingInSentence) {
+            const confirmed = window.confirm(`The gesture "${gestureName}" already exists. Do you want to use the existing gesture for this sentence?`);
+            if (confirmed) {
+                const samples = existingGesture ? existingGesture.samples : existingInSentence!.samples;
+                onCaptureComplete({
+                    label: gestureName,
+                    samples: samples,
+                });
+                return;
+            }
         }
         
         setIsSaving(true);
@@ -258,6 +274,49 @@ function SentenceTrainer({ onIsCapturingChange, lastLandmarks, addSentence, gest
   const [currentStep, setCurrentStep] = useState(0);
   const [capturedGestures, setCapturedGestures] = useState<SentenceGesture[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  
+  const handleSaveSentence = useCallback(async (finalGestures: SentenceGesture[]) => {
+    if (isSaving) return;
+    
+    if (finalGestures.length !== sentenceWords.length) {
+      console.error("Mismatch between captured gestures and sentence words.");
+      toast({ variant: 'destructive', title: 'Error', description: 'Could not save the sentence. Data mismatch.' });
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const newSentence: Sentence = {
+        label: sentenceLabel.trim(),
+        gestures: finalGestures,
+      };
+      
+      await addSentence(newSentence);
+      
+      toast({
+        title: 'Sentence Saved!',
+        description: `"${newSentence.label}" has been trained successfully.`,
+      });
+      
+      setSentenceLabel('');
+      setSentenceWords([]);
+      setCurrentStep(0);
+      setCapturedGestures([]);
+
+    } catch (error) {
+      console.error("Error saving sentence:", error);
+      toast({ variant: 'destructive', title: 'Error', description: 'Could not save the sentence.' });
+    } finally {
+        setIsSaving(false);
+    }
+  }, [sentenceLabel, sentenceWords, addSentence, toast, isSaving]);
+
+  useEffect(() => {
+    if (sentenceWords.length > 0 && capturedGestures.length === sentenceWords.length) {
+      handleSaveSentence(capturedGestures);
+    }
+  }, [capturedGestures, sentenceWords.length, handleSaveSentence]);
+
 
   const startTraining = () => {
       const words = sentenceLabel.trim().split(/\s+/).filter(Boolean);
@@ -284,41 +343,10 @@ function SentenceTrainer({ onIsCapturingChange, lastLandmarks, addSentence, gest
   };
 
   const handleGestureCaptured = (gesture: SentenceGesture) => {
-      setCapturedGestures(prev => [...prev, gesture]);
+      const newCapturedGestures = [...capturedGestures, gesture];
+      setCapturedGestures(newCapturedGestures);
       setCurrentStep(prev => prev + 1);
   };
-  
-  useEffect(() => {
-    if (sentenceWords.length > 0 && capturedGestures.length === sentenceWords.length) {
-      const handleSaveSentence = async () => {
-        if (isSaving) return;
-        setIsSaving(true);
-        try {
-          const newSentence: Sentence = {
-            label: sentenceLabel.trim(),
-            gestures: capturedGestures,
-          };
-          
-          await addSentence(newSentence);
-          
-          toast({
-            title: 'Sentence Saved!',
-            description: `"${newSentence.label}" has been trained successfully.`,
-          });
-          
-          resetTraining();
-    
-        } catch (error) {
-          console.error("Error saving sentence:", error);
-          toast({ variant: 'destructive', title: 'Error', description: 'Could not save the sentence.' });
-          setIsSaving(false); // Allow retry
-        }
-      };
-
-      handleSaveSentence();
-    }
-  }, [capturedGestures, sentenceWords, sentenceLabel, addSentence, toast, isSaving]);
-
 
   useEffect(() => {
     onIsCapturingChange(true);
@@ -366,6 +394,8 @@ function SentenceTrainer({ onIsCapturingChange, lastLandmarks, addSentence, gest
                     onCaptureComplete={handleGestureCaptured}
                     lastLandmarks={lastLandmarks}
                     isCapturing={true}
+                    gestures={gestures}
+                    sentences={sentences}
                 />
             ) : (
                  <div className="space-y-4">
@@ -491,7 +521,11 @@ export function GestureTrainer() {
                                   <div key={sentence.label} className="flex items-center justify-between p-3 rounded-lg bg-background hover:bg-muted/50 transition-colors">
                                   <div className="flex-1">
                                     <p className="font-medium">{sentence.label}</p>
-                                    <p className="text-sm text-muted-foreground">{sentence.gestures.map(g => g.label).join(' → ')}</p>
+                                    {sentence.gestures && (
+                                        <p className="text-sm text-muted-foreground">
+                                            {sentence.gestures.map(g => g.label).join(' → ')}
+                                        </p>
+                                    )}
                                   </div>
                                   <Button variant="ghost" size="icon" onClick={() => deleteSentence(sentence.label)} aria-label={`Delete ${sentence.label}`}>
                                       <Trash2 className="h-4 w-4 text-destructive" />
