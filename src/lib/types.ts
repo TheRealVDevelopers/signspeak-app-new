@@ -16,6 +16,6 @@ export interface Gesture {
 }
 
 export interface Sentence {
-  label: string; // The full sentence text
-  samples: LandmarkData[][]; // An array of samples. Each sample is an array of gestures (LandmarkData).
+  label: string;
+  samples: LandmarkData[][]; // An array of samples, where each sample is a sequence of landmark data captures
 }

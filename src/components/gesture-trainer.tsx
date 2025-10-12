@@ -209,72 +209,69 @@ function WordTrainer({ gestures, addGesture, isSaving, setIsSaving, onIsCapturin
   )
 }
 
-const SENTENCE_SAMPLES_REQUIRED = 10;
-const GESTURE_COOLDOWN_MS = 1000; // Time to wait after a gesture is detected before detecting a new one
-const SEQUENCE_TIMEOUT_MS = 5000; // Time to wait for the next gesture in a sequence
+const GESTURE_INTERVAL_MS = 100; // How often to capture landmarks for the sequence
+const MIN_GESTURE_DISTANCE = 0.1; // Threshold to determine if a new gesture has been made
 
-function SentenceTrainer({ gestures, onIsCapturingChange, lastLandmarks, isCapturing }) {
+function SentenceTrainer({ onIsCapturingChange, lastLandmarks, isCapturing }) {
   const { toast } = useToast();
   const [sentenceLabel, setSentenceLabel] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [capturedSamples, setCapturedSamples] = useState<LandmarkData[][]>([]);
   const [currentSequence, setCurrentSequence] = useState<LandmarkData[]>([]);
+  const [samplesToCollect, setSamplesToCollect] = useState(10);
   
-  const lastGestureTimeRef = useRef(0);
-  const sequenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastRecordedLandmarksRef = useRef<LandmarkData | null>(null);
 
-  // This effect will handle the core logic of sequence detection during recording
-  useEffect(() => {
-    if (!isRecording || lastLandmarks.length === 0) {
-      return;
-    }
-
-    const now = Date.now();
-    
-    // Check if cooldown period has passed since the last gesture was added
-    if (now - lastGestureTimeRef.current < GESTURE_COOLDOWN_MS) {
-      return;
-    }
-    
-    // Add the current landmarks as a new gesture in the sequence
-    setCurrentSequence(prev => [...prev, lastLandmarks]);
-    lastGestureTimeRef.current = now;
-
-    // Reset the timeout every time a new gesture is added to the sequence
-    if (sequenceTimeoutRef.current) {
-      clearTimeout(sequenceTimeoutRef.current);
-    }
-
-    // Set a timeout to end the sequence if no new gesture is detected
-    sequenceTimeoutRef.current = setTimeout(() => {
-      // This part is tricky. For now, we'll manually stop the sequence.
-      // In a real scenario, this timeout would imply the end of a sentence.
-    }, SEQUENCE_TIMEOUT_MS);
-
-  }, [lastLandmarks, isRecording]);
-
-  const handleToggleRecording = () => {
-    if (isRecording) {
-      // Stopping the recording
-      setIsRecording(false);
-      if (currentSequence.length > 0) {
-        setCapturedSamples(prev => [...prev, currentSequence]);
+  const calculateDistance = (lm1: LandmarkData, lm2: LandmarkData): number => {
+      if (lm1.length !== lm2.length) return Infinity;
+      let totalDistance = 0;
+      for (let i = 0; i < lm1.length; i++) {
+          const dx = lm1[i].x - lm2[i].x;
+          const dy = lm1[i].y - lm2[i].y;
+          const dz = lm1[i].z - lm2[i].z;
+          totalDistance += Math.sqrt(dx * dx + dy * dy + dz * dz);
       }
-      setCurrentSequence([]);
-      if (sequenceTimeoutRef.current) {
-        clearTimeout(sequenceTimeoutRef.current);
-      }
-    } else {
-      // Starting a new recording
-      if (capturedSamples.length >= SENTENCE_SAMPLES_REQUIRED) {
-        toast({ title: 'Sample Limit Reached', description: `You have already captured ${SENTENCE_SAMPLES_REQUIRED} samples.` });
+      return totalDistance / lm1.length;
+  };
+
+  const startRecording = () => {
+    if (!sentenceLabel.trim()) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Please enter a label for the sentence.' });
         return;
-      }
-      setIsRecording(true);
-      setCurrentSequence([]);
-      toast({ title: 'Recording Started', description: 'Perform the gesture sequence for your sentence.' });
     }
+    if(capturedSamples.length >= samplesToCollect){
+        toast({ title: "Sample limit reached", description: `You have already captured ${samplesToCollect} samples.` });
+        return;
+    }
+
+    setIsRecording(true);
+    setCurrentSequence([]);
+    lastRecordedLandmarksRef.current = null;
+    toast({ title: 'Recording Started', description: 'Perform the gesture sequence for your sentence.' });
+
+    recordingIntervalRef.current = setInterval(() => {
+      if (lastLandmarks && lastLandmarks.length > 0) {
+        const normalizedLandmarks = normalizeLandmarks(lastLandmarks);
+        if (!lastRecordedLandmarksRef.current || calculateDistance(normalizedLandmarks, lastRecordedLandmarksRef.current) > MIN_GESTURE_DISTANCE) {
+            setCurrentSequence(prev => [...prev, normalizedLandmarks]);
+            lastRecordedLandmarksRef.current = normalizedLandmarks;
+        }
+      }
+    }, GESTURE_INTERVAL_MS);
+  };
+
+  const stopRecording = () => {
+    setIsRecording(false);
+    if (recordingIntervalRef.current) {
+      clearInterval(recordingIntervalRef.current);
+    }
+    if (currentSequence.length > 0) {
+      setCapturedSamples(prev => [...prev, currentSequence]);
+    }
+    setCurrentSequence([]);
+    toast({ title: 'Recording Stopped', description: 'Sample captured.' });
   };
 
   const handleDeleteSample = (index: number) => {
@@ -286,20 +283,16 @@ function SentenceTrainer({ gestures, onIsCapturingChange, lastLandmarks, isCaptu
       toast({ variant: 'destructive', title: 'Error', description: 'Please enter a label for the sentence.' });
       return;
     }
-    if (capturedSamples.length < SENTENCE_SAMPLES_REQUIRED) {
-      toast({ variant: 'destructive', title: 'Error', description: `Please capture ${SENTENCE_SAMPLES_REQUIRED} samples.` });
+    if (capturedSamples.length < samplesToCollect) {
+      toast({ variant: 'destructive', title: 'Error', description: `Please capture ${samplesToCollect} samples.` });
       return;
     }
     
     setIsSaving(true);
     try {
-      const normalizedSamples = capturedSamples.map(sampleSequence =>
-        sampleSequence.map(gesture => normalizeLandmarks(gesture))
-      );
-
       const sentence: Sentence = {
         label: sentenceLabel,
-        samples: normalizedSamples,
+        samples: capturedSamples,
       };
       
       await sentenceDB.add(sentence);
@@ -322,28 +315,43 @@ function SentenceTrainer({ gestures, onIsCapturingChange, lastLandmarks, isCaptu
 
   useEffect(() => {
     onIsCapturingChange(true);
+    return () => {
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+      }
+    }
   }, [onIsCapturingChange]);
 
-  const progress = (capturedSamples.length / SENTENCE_SAMPLES_REQUIRED) * 100;
+  const progress = (capturedSamples.length / samplesToCollect) * 100;
 
   return (
     <CardContent className="space-y-4 pt-6">
       <div className="space-y-2">
-        <Label htmlFor="sentence-label">Sentence Label</Label>
+        <Label htmlFor="sentence-label">Sentence</Label>
         <Input
           id="sentence-label"
           placeholder="e.g., How are you?"
           value={sentenceLabel}
           onChange={(e) => setSentenceLabel(e.target.value)}
-          disabled={isSaving || isRecording || capturedSamples.length >= SENTENCE_SAMPLES_REQUIRED}
+          disabled={isSaving || isRecording}
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="samples-to-collect">Number of Samples to Record</Label>
+        <Input
+          id="samples-to-collect"
+          type="number"
+          value={samplesToCollect}
+          onChange={(e) => setSamplesToCollect(Math.max(1, parseInt(e.target.value) || 1))}
+          disabled={isSaving || isRecording}
         />
       </div>
 
       <div className="p-4 rounded-lg border bg-background text-center space-y-2">
           <p className="text-sm text-muted-foreground">
-            {isRecording ? `Recording sequence... Found ${currentSequence.length} gestures.` : "Ready to record a new sample."}
+            {isRecording ? `Recording... Captured ${currentSequence.length} distinct poses.` : "Ready to record a new sample."}
           </p>
-          <Button onClick={handleToggleRecording} disabled={!sentenceLabel.trim() || isSaving || capturedSamples.length >= SENTENCE_SAMPLES_REQUIRED}>
+          <Button onClick={isRecording ? stopRecording : startRecording} disabled={!sentenceLabel.trim() || isSaving}>
             {isRecording ? <Square className="mr-2" /> : <Play className="mr-2" />}
             {isRecording ? 'Stop Recording' : 'Start Recording Sample'}
           </Button>
@@ -352,7 +360,7 @@ function SentenceTrainer({ gestures, onIsCapturingChange, lastLandmarks, isCaptu
       <div className="flex items-center gap-4">
         <p className="text-sm font-medium">Progress:</p>
         <Progress value={progress} className="w-1/2" />
-        <span className="text-sm text-muted-foreground">{capturedSamples.length}/{SENTENCE_SAMPLES_REQUIRED}</span>
+        <span className="text-sm text-muted-foreground">{capturedSamples.length}/{samplesToCollect}</span>
       </div>
 
       {capturedSamples.length > 0 && (
@@ -362,7 +370,7 @@ function SentenceTrainer({ gestures, onIsCapturingChange, lastLandmarks, isCaptu
             <div className="grid grid-cols-5 gap-2 pr-4">
               {capturedSamples.map((sample, index) => (
                 <div key={index} className="relative group aspect-square bg-muted rounded-md flex items-center justify-center p-1">
-                  <span className="text-xs text-center text-muted-foreground">{sample.length} gestures</span>
+                  <span className="text-xs text-center text-muted-foreground">{sample.length} poses</span>
                   <Button
                     variant="destructive"
                     size="icon"
@@ -378,7 +386,7 @@ function SentenceTrainer({ gestures, onIsCapturingChange, lastLandmarks, isCaptu
         </div>
       )}
 
-      {capturedSamples.length >= SENTENCE_SAMPLES_REQUIRED && (
+      {capturedSamples.length >= samplesToCollect && (
         <Alert className="border-primary bg-primary/10">
           <CheckCircle className="h-4 w-4 text-primary" />
           <AlertTitle>Ready to Save!</AlertTitle>
@@ -388,7 +396,7 @@ function SentenceTrainer({ gestures, onIsCapturingChange, lastLandmarks, isCaptu
         </Alert>
       )}
 
-      <Button onClick={handleSaveSentence} disabled={capturedSamples.length < SENTENCE_SAMPLES_REQUIRED || isSaving || isRecording} className="w-full" size="lg">
+      <Button onClick={handleSaveSentence} disabled={capturedSamples.length < samplesToCollect || isSaving || isRecording} className="w-full" size="lg">
         {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <BookOpen className="mr-2"/>}
         Save Sentence
       </Button>
@@ -410,6 +418,8 @@ export function GestureTrainer() {
     // We only want to update if there are actual landmarks
     if (worldLandmarks && worldLandmarks.length > 0) {
         setLastLandmarks(worldLandmarks);
+    } else {
+        setLastLandmarks([]);
     }
   }, []);
 
@@ -443,7 +453,7 @@ export function GestureTrainer() {
                   />
               </TabsContent>
               <TabsContent value="sentence">
-                  <SentenceTrainer gestures={gestures} onIsCapturingChange={setIsCapturing} lastLandmarks={lastLandmarks} isCapturing={isCapturing} />
+                  <SentenceTrainer onIsCapturingChange={setIsCapturing} lastLandmarks={lastLandmarks} isCapturing={isCapturing} />
               </TabsContent>
           </Tabs>
         </Card>

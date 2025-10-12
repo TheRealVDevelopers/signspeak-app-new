@@ -37,7 +37,7 @@ export function WebcamView({ onLandmarks, isCapturing, className }: WebcamViewPr
             delegate: 'GPU',
           },
           runningMode: 'VIDEO',
-          numHands: 1,
+          numHands: 2, // Detect two hands
         });
         
         stream = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -98,7 +98,11 @@ export function WebcamView({ onLandmarks, isCapturing, className }: WebcamViewPr
         canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
 
         if (results.landmarks.length > 0) {
-          onLandmarksRef.current(results.landmarks[0], results.worldLandmarks[0] || []);
+          // Combine landmarks from all detected hands into one array
+          const allLandmarks = results.landmarks.flat();
+          const allWorldLandmarks = results.worldLandmarks.flat();
+          onLandmarksRef.current(allLandmarks, allWorldLandmarks);
+          
           if(isCapturing){
             for (const landmarks of results.landmarks) {
               drawingUtils.drawConnectors(landmarks, HandLandmarker.HAND_CONNECTIONS, { color: 'hsl(var(--primary))', lineWidth: 5 });
