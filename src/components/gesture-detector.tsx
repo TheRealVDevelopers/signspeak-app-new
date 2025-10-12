@@ -64,6 +64,7 @@ function kNearestNeighbors(
   const normalizedInput = normalizeLandmarks(inputLandmarks);
 
   for (const gesture of trainedGestures) {
+    if (!gesture || !gesture.samples) continue;
     for (const sample of gesture.samples) {
       const normalizedSample = normalizeLandmarks(sample);
       let totalDistance = 0;
@@ -115,7 +116,7 @@ export function GestureDetector() {
 
   const { toast } = useToast();
 
-  const allTrainedGestures = trainedSentences.flatMap(s => s.gestures);
+  const allTrainedGestures = trainedSentences.flatMap(s => s.gestures).filter(Boolean);
 
   useEffect(() => {
     const loadData = async () => {
@@ -146,7 +147,7 @@ export function GestureDetector() {
   const handleDetection = useCallback((landmarks: Landmark[]) => {
     if (trainedWords.length === 0 && allTrainedGestures.length === 0) return;
 
-    const combinedGestureSet = [...trainedWords, ...allTrainedGestures];
+    const combinedGestureSet = [...trainedWords, ...allTrainedGestures].filter(Boolean);
     const knnResult = kNearestNeighbors(landmarks, combinedGestureSet, 3);
     
     if (knnResult.confidence > CONFIDENCE_THRESHOLD && knnResult.label !== 'Unknown') {
@@ -170,7 +171,7 @@ export function GestureDetector() {
 
         // Check for sentence match
         for (const sentence of trainedSentences) {
-            if (newSequence.length === sentence.gestures.length) {
+            if (sentence.gestures && newSequence.length === sentence.gestures.length) {
                 const isMatch = sentence.gestures.every((g, i) => g.label === newSequence[i]);
                 if (isMatch) {
                     setSentenceResult(sentence.label);
@@ -296,4 +297,3 @@ export function GestureDetector() {
     </div>
   );
 }
-
