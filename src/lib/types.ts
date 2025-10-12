@@ -15,7 +15,12 @@ export interface Gesture {
   type: 'word';
 }
 
+export interface SentenceGesture {
+  label: string; // The word this gesture represents, e.g., "Good"
+  samples: LandmarkData[];
+}
+
 export interface Sentence {
-  label: string;
-  samples: LandmarkData[][]; // An array of samples, where each sample is a sequence of landmark data captures
+  label: string; // The full sentence, e.g., "Good Morning"
+  gestures: SentenceGesture[]; // The sequence of gestures that make up the sentence
 }
