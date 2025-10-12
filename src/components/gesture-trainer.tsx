@@ -11,7 +11,7 @@ import { Input } from './ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './ui/card';
 import { Progress } from './ui/progress';
 import { ScrollArea } from './ui/scroll-area';
-import { Camera, Trash2, Loader2, CheckCircle, ArrowRight, X, Book, MessageSquare, BookOpen, CircleDot, Play, Square } from 'lucide-react';
+import { Camera, Trash2, Loader2, CheckCircle, ArrowRight, X, Book, MessageSquare, BookOpen, Play, Square } from 'lucide-react';
 import { validateGesture } from '@/ai/flows/gesture-validation-tool';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { useRouter } from 'next/navigation';
@@ -20,6 +20,7 @@ import { Textarea } from './ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { sentenceDB } from '@/lib/db';
 import { Label } from './ui/label';
+import { useSentences } from '@/hooks/use-sentences';
 
 const WORD_SAMPLES_REQUIRED = 30;
 
@@ -209,55 +210,37 @@ function WordTrainer({ gestures, addGesture, isSaving, setIsSaving, onIsCapturin
   )
 }
 
-const GESTURE_INTERVAL_MS = 100; // How often to capture landmarks for the sequence
-const MIN_GESTURE_DISTANCE = 0.1; // Threshold to determine if a new gesture has been made
+const GESTURE_INTERVAL_MS = 100;
 
-function SentenceTrainer({ onIsCapturingChange, lastLandmarks, isCapturing }) {
+function SentenceTrainer({ onIsCapturingChange, lastLandmarks, addSentence }) {
   const { toast } = useToast();
   const [sentenceLabel, setSentenceLabel] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [capturedSamples, setCapturedSamples] = useState<LandmarkData[][]>([]);
   const [currentSequence, setCurrentSequence] = useState<LandmarkData[]>([]);
-  const [samplesToCollect, setSamplesToCollect] = useState(10);
+  const [samplesToCollect, setSamplesToCollect] = useState(5);
   
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const lastRecordedLandmarksRef = useRef<LandmarkData | null>(null);
-
-  const calculateDistance = (lm1: LandmarkData, lm2: LandmarkData): number => {
-      if (lm1.length !== lm2.length) return Infinity;
-      let totalDistance = 0;
-      for (let i = 0; i < lm1.length; i++) {
-          const dx = lm1[i].x - lm2[i].x;
-          const dy = lm1[i].y - lm2[i].y;
-          const dz = lm1[i].z - lm2[i].z;
-          totalDistance += Math.sqrt(dx * dx + dy * dy + dz * dz);
-      }
-      return totalDistance / lm1.length;
-  };
-
+  
   const startRecording = () => {
     if (!sentenceLabel.trim()) {
         toast({ variant: 'destructive', title: 'Error', description: 'Please enter a label for the sentence.' });
         return;
     }
-    if(capturedSamples.length >= samplesToCollect){
+    if (capturedSamples.length >= samplesToCollect) {
         toast({ title: "Sample limit reached", description: `You have already captured ${samplesToCollect} samples.` });
         return;
     }
 
     setIsRecording(true);
     setCurrentSequence([]);
-    lastRecordedLandmarksRef.current = null;
     toast({ title: 'Recording Started', description: 'Perform the gesture sequence for your sentence.' });
 
     recordingIntervalRef.current = setInterval(() => {
       if (lastLandmarks && lastLandmarks.length > 0) {
         const normalizedLandmarks = normalizeLandmarks(lastLandmarks);
-        if (!lastRecordedLandmarksRef.current || calculateDistance(normalizedLandmarks, lastRecordedLandmarksRef.current) > MIN_GESTURE_DISTANCE) {
-            setCurrentSequence(prev => [...prev, normalizedLandmarks]);
-            lastRecordedLandmarksRef.current = normalizedLandmarks;
-        }
+        setCurrentSequence(prev => [...prev, normalizedLandmarks]);
       }
     }, GESTURE_INTERVAL_MS);
   };
@@ -267,11 +250,13 @@ function SentenceTrainer({ onIsCapturingChange, lastLandmarks, isCapturing }) {
     if (recordingIntervalRef.current) {
       clearInterval(recordingIntervalRef.current);
     }
-    if (currentSequence.length > 0) {
+    if (currentSequence.length > 1) { // Only save if there's a sequence
       setCapturedSamples(prev => [...prev, currentSequence]);
+      toast({ title: 'Recording Stopped', description: `Sample captured with ${currentSequence.length} frames.` });
+    } else {
+      toast({ variant: 'destructive', title: 'Recording Too Short', description: 'Please perform a longer gesture sequence.' });
     }
     setCurrentSequence([]);
-    toast({ title: 'Recording Stopped', description: 'Sample captured.' });
   };
 
   const handleDeleteSample = (index: number) => {
@@ -295,7 +280,7 @@ function SentenceTrainer({ onIsCapturingChange, lastLandmarks, isCapturing }) {
         samples: capturedSamples,
       };
       
-      await sentenceDB.add(sentence);
+      await addSentence(sentence);
       
       toast({
         title: 'Sentence Saved!',
@@ -349,11 +334,11 @@ function SentenceTrainer({ onIsCapturingChange, lastLandmarks, isCapturing }) {
 
       <div className="p-4 rounded-lg border bg-background text-center space-y-2">
           <p className="text-sm text-muted-foreground">
-            {isRecording ? `Recording... Captured ${currentSequence.length} distinct poses.` : "Ready to record a new sample."}
+            {isRecording ? `Recording... Captured ${currentSequence.length} frames.` : "Ready to record a new sample."}
           </p>
           <Button onClick={isRecording ? stopRecording : startRecording} disabled={!sentenceLabel.trim() || isSaving}>
             {isRecording ? <Square className="mr-2" /> : <Play className="mr-2" />}
-            {isRecording ? 'Stop Recording' : 'Start Recording Sample'}
+            {isRecording ? 'Stop Recording' : `Record Sample ${capturedSamples.length + 1}`}
           </Button>
       </div>
 
@@ -370,7 +355,7 @@ function SentenceTrainer({ onIsCapturingChange, lastLandmarks, isCapturing }) {
             <div className="grid grid-cols-5 gap-2 pr-4">
               {capturedSamples.map((sample, index) => (
                 <div key={index} className="relative group aspect-square bg-muted rounded-md flex items-center justify-center p-1">
-                  <span className="text-xs text-center text-muted-foreground">{sample.length} poses</span>
+                  <span className="text-xs text-center text-muted-foreground">{sample.length} frames</span>
                   <Button
                     variant="destructive"
                     size="icon"
@@ -408,14 +393,13 @@ function SentenceTrainer({ onIsCapturingChange, lastLandmarks, isCapturing }) {
 export function GestureTrainer() {
   const router = useRouter();
   const { gestures, addGesture, deleteGesture, isLoading: isGesturesLoading } = useGestures();
+  const { sentences, addSentence, deleteSentence, isLoading: isSentencesLoading } = useSentences();
   const [isCapturing, setIsCapturing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [lastLandmarks, setLastLandmarks] = useState<LandmarkData>([]);
   const [activeTab, setActiveTab] = useState("word");
 
-
   const handleLandmarks = useCallback((landmarks: Landmark[], worldLandmarks: Landmark[]) => {
-    // We only want to update if there are actual landmarks
     if (worldLandmarks && worldLandmarks.length > 0) {
         setLastLandmarks(worldLandmarks);
     } else {
@@ -426,6 +410,9 @@ export function GestureTrainer() {
   useEffect(() => {
     setIsCapturing(true);
   }, []);
+
+  const wordCount = gestures.length;
+  const sentenceCount = sentences.length;
 
   return (
     <div className="grid lg:grid-cols-2 gap-8 p-4 md:p-6">
@@ -453,7 +440,11 @@ export function GestureTrainer() {
                   />
               </TabsContent>
               <TabsContent value="sentence">
-                  <SentenceTrainer onIsCapturingChange={setIsCapturing} lastLandmarks={lastLandmarks} isCapturing={isCapturing} />
+                  <SentenceTrainer 
+                    onIsCapturingChange={setIsCapturing} 
+                    lastLandmarks={lastLandmarks} 
+                    addSentence={addSentence} 
+                  />
               </TabsContent>
           </Tabs>
         </Card>
@@ -462,36 +453,59 @@ export function GestureTrainer() {
       <div className="lg:col-span-1 space-y-8">
         <Card className="glass-card">
           <CardHeader>
-            <CardTitle className="text-2xl">Trained Gestures</CardTitle>
-            <CardDescription>A list of all individual words you have trained.</CardDescription>
+            <CardTitle className="text-2xl">Trained Library</CardTitle>
+            <CardDescription>{`You have trained ${wordCount} words and ${sentenceCount} sentences.`}</CardDescription>
           </CardHeader>
           <CardContent>
-            {isGesturesLoading ? (
-              <div className="space-y-2">
-                {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
-              </div>
-            ) : gestures.length > 0 ? (
-              <ScrollArea className="h-[360px]">
-                <div className="space-y-2 pr-4">
-                  {gestures.map((gesture) => (
-                    <div key={gesture.label} className="flex items-start justify-between p-3 rounded-lg bg-background hover:bg-muted/20 transition-colors">
-                      <div>
-                        <p className="font-medium">{gesture.label}</p>
-                        <p className="text-sm text-muted-foreground">{gesture.description}</p>
-                      </div>
-                      <Button variant="ghost" size="icon" onClick={() => deleteGesture(gesture.label)} aria-label={`Delete ${gesture.label}`}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
-            ) : (
-              <p className="text-muted-foreground text-center py-8">No words trained yet.</p>
-            )}
+             {isGesturesLoading || isSentencesLoading ? (
+               <div className="space-y-2">
+                 {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+               </div>
+             ) : (
+                <ScrollArea className="h-[360px]">
+                  <div className="space-y-4 pr-4">
+                      {gestures.length > 0 && (
+                          <div>
+                              <h3 className="text-lg font-semibold mb-2">Words</h3>
+                              <div className="space-y-2">
+                              {gestures.map((gesture) => (
+                                  <div key={gesture.label} className="flex items-start justify-between p-3 rounded-lg bg-background hover:bg-muted/50 transition-colors">
+                                  <div>
+                                      <p className="font-medium">{gesture.label}</p>
+                                      <p className="text-sm text-muted-foreground">{gesture.description}</p>
+                                  </div>
+                                  <Button variant="ghost" size="icon" onClick={() => deleteGesture(gesture.label)} aria-label={`Delete ${gesture.label}`}>
+                                      <Trash2 className="h-4 w-4 text-destructive" />
+                                  </Button>
+                                  </div>
+                              ))}
+                              </div>
+                          </div>
+                      )}
+                      {sentences.length > 0 && (
+                          <div>
+                              <h3 className="text-lg font-semibold mb-2">Sentences</h3>
+                              <div className="space-y-2">
+                              {sentences.map((sentence) => (
+                                  <div key={sentence.label} className="flex items-center justify-between p-3 rounded-lg bg-background hover:bg-muted/50 transition-colors">
+                                  <p className="font-medium">{sentence.label}</p>
+                                  <Button variant="ghost" size="icon" onClick={() => deleteSentence(sentence.label)} aria-label={`Delete ${sentence.label}`}>
+                                      <Trash2 className="h-4 w-4 text-destructive" />
+                                  </Button>
+                                  </div>
+                              ))}
+                              </div>
+                          </div>
+                      )}
+                      {wordCount === 0 && sentenceCount === 0 && (
+                          <p className="text-muted-foreground text-center py-8">No words or sentences trained yet.</p>
+                      )}
+                  </div>
+                </ScrollArea>
+             )}
           </CardContent>
           <CardFooter>
-            <Button size="lg" className="w-full" onClick={() => router.push('/detect')} disabled={gestures.length === 0}>
+            <Button size="lg" className="w-full" onClick={() => router.push('/detect')} disabled={wordCount === 0 && sentenceCount === 0}>
               Go to Detection Page <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </CardFooter>
