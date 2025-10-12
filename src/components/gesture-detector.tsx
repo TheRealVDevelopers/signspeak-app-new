@@ -16,6 +16,7 @@ import { useSentences } from '@/hooks/use-sentences';
 const CONFIDENCE_THRESHOLD = 0.8;
 const SEQUENCE_TIMEOUT_MS = 7000;
 const DETECTION_INTERVAL_MS = 100;
+const SENTENCE_COOLDOWN_MS = 3000; // Cooldown period after sentence detection
 
 function normalizeLandmarks(landmarks: Landmark[]): Landmark[] {
     if (landmarks.length === 0) return [];
@@ -113,6 +114,8 @@ export function GestureDetector() {
   const sequenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastDetectionTimeRef = useRef(0);
   const lastRecognizedWordRef = useRef<{ label: string, timestamp: number } | null>(null);
+  const sentenceCooldownEndRef = useRef(0);
+
 
   const { toast } = useToast();
 
@@ -146,12 +149,17 @@ export function GestureDetector() {
 
   const handleDetection = useCallback((landmarks: Landmark[]) => {
     if (trainedWords.length === 0 && allTrainedGestures.length === 0) return;
+    
+    const now = Date.now();
+    if (now < sentenceCooldownEndRef.current) {
+        // We are in a cooldown period after a sentence was detected, so don't detect anything.
+        return;
+    }
 
     const combinedGestureSet = [...trainedWords, ...allTrainedGestures].filter(Boolean);
     const knnResult = kNearestNeighbors(landmarks, combinedGestureSet, 3);
     
     if (knnResult.confidence > CONFIDENCE_THRESHOLD && knnResult.label !== 'Unknown') {
-        const now = Date.now();
         // Debounce recognition of the same word
         if (lastRecognizedWordRef.current?.label === knnResult.label && now - lastRecognizedWordRef.current.timestamp < 1000) {
             return;
@@ -177,6 +185,7 @@ export function GestureDetector() {
                     setSentenceResult(sentence.label);
                     setWordResult(null); // Clear word result
                     resetSequence();
+                    sentenceCooldownEndRef.current = Date.now() + SENTENCE_COOLDOWN_MS;
                     return; // Exit after match
                 }
             }
@@ -205,9 +214,9 @@ export function GestureDetector() {
   }, [isDetecting, handleDetection, resetSequence]);
 
   useEffect(() => {
-    // Clear sentence result after a few seconds
+    // Clear sentence result after cooldown
     if(sentenceResult) {
-        const timer = setTimeout(() => setSentenceResult(null), 5000);
+        const timer = setTimeout(() => setSentenceResult(null), SENTENCE_COOLDOWN_MS);
         return () => clearTimeout(timer);
     }
   }, [sentenceResult]);
@@ -262,12 +271,7 @@ export function GestureDetector() {
                     <p className="text-4xl font-bold text-accent truncate">{sentenceResult}</p>
                   </>
                 ) : (
-                  <div className="space-y-2">
-                    <p className="text-xl text-muted-foreground">Listening for sentences...</p>
-                    <p className="text-sm text-muted-foreground h-4">
-                        {currentSequence.join(' → ')}
-                    </p>
-                  </div>
+                  <p className="text-xl text-muted-foreground">Listening for sentences...</p>
                 )}
             </CardContent>
         </Card>
@@ -277,9 +281,15 @@ export function GestureDetector() {
             <CardTitle className="flex items-center gap-2 text-xl">
               <History /> Word History
             </CardTitle>
-            <CardDescription>Last 5 recognized words.</CardDescription>
+            <CardDescription>Last 5 recognized words. Current sequence is shown at the top.</CardDescription>
           </CardHeader>
           <CardContent>
+             {isDetecting && currentSequence.length > 0 && (
+                <div className="mb-4 p-3 rounded-md bg-primary/10">
+                    <p className="text-sm font-semibold text-primary-foreground/80">Current Sequence:</p>
+                    <p className="text-lg font-medium text-primary-foreground">{currentSequence.join(' → ')}</p>
+                </div>
+            )}
             {wordHistory.length > 0 ? (
               <ul className="space-y-2">
                 {wordHistory.map((item, index) => (
