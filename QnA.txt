@@ -1,0 +1,80 @@
+1. What is SignSpeak?
+SignSpeak is an application that translates sign language (gestures) into text or speech, making communication easier for individuals with speech or hearing impairments. The app uses computer vision and machine learning models for gesture recognition and Firebase for backend integration.
+
+2. What problem does your app solve and for whom?
+It solves the communication barrier faced by the hearing and speech-impaired community, allowing them to converse with non-signers without an interpreter.
+
+3. What makes SignSpeak unique?
+SignSpeak provides real-time translation, has learning resources for sign language, offers customization (language, color scheme, font), and focuses on accessibility and inclusivity.
+
+4. What are the main features of SignSpeak?
+
+Real-time sign-to-text/speech translation
+
+Customizable user interface
+
+Support for multiple sign language dialects (if implemented)
+
+Tutorials and learning resources
+
+Cloud-based storage and authentication (via Firebase).
+
+Technical and Development Questions
+5. What technologies did you use? Why?
+
+Frontend: React (for dynamic UI)
+
+Backend: Node.js (if applicable)
+
+Machine Learning: Python/JS (for gesture detection or via pre-trained models)
+
+Database & Auth: Firebase (easy integration, real-time updates, managed backend, and authentication)
+
+Cloud Hosting: Firebase Hosting.
+
+6. How does the sign recognition work?
+
+Webcam or phone camera captures hand gestures.
+
+Computer vision model analyzes gesture images (possibly using OpenCV, TensorFlow, or other ML frameworks).
+
+Recognized gesture is mapped from a database to a letter/word.
+
+Output is displayed as text, and optionally converted to speech.
+
+7. How accurate is your software?
+Accuracy depends on dataset size, model type, and training quality. For college projects, expect moderate accuracy, but commercial models claim up to 95% for standard gestures under good lighting.
+
+8. How do you ensure the data privacy and security?
+Firebase handles authentication, data at rest encryption, secure API endpoints, and role-based security rules in Firestore/RealtimeDB.
+
+Deployment & Firebase Studio Specific
+9. Why use Firebase Studio?
+Firebase Studio quickly scaffolds and deploys both frontend and backend, provides easy integration for auth and database, AI-powered development, and simplifies project management.
+
+10. How did you deploy the project?
+Used Firebase Studio’s tools to build and deploy the app, connecting the frontend code (likely React/Next.js) with Firebase backend, and published using one-click deployment in the Studio UI.
+
+11. What is Firebase Authentication?
+A backend service handling sign-in via email, Google, and other providers, securing user data and session management.
+
+12. How do you handle new features or bug fixes?
+Use Firebase Studio for iterative development, push code updates via GitHub (if connected), and auto-publish after review and testing.
+
+Research and Ethics
+13. Do you address bias in gesture recognition?
+Bias can be reduced by using diverse training data. Commercial projects continue improving with larger, inclusive datasets.
+
+14. What was most challenging in your project?
+Most students state gesture dataset creation, model training, and end-to-end integration as hardest parts.
+
+15. What possible improvements and future scope do you see?
+
+Expand the dataset for more signs/langs
+
+Add context recognition (face, body language)
+
+Develop a mobile version
+
+Enhance accuracy in real-world conditions (lighting, backgrounds).
+
