@@ -3,7 +3,7 @@ import { openDB } from 'idb';
 import type { Gesture, Sentence } from '@/lib/types';
 
 const DB_NAME = 'SignSpeakDB';
-const DB_VERSION = 3; 
+const DB_VERSION = 2; // Incremented version
 const GESTURE_STORE_NAME = 'gestures';
 const SENTENCE_STORE_NAME = 'sentences';
 
@@ -30,6 +30,12 @@ const getDB = () => {
       put: async () => '',
       delete: async () => {},
       clear: async () => {},
+      transaction: () => ({
+        objectStore: () => ({
+          getAll: async () => [],
+        }),
+        done: Promise.resolve(),
+      }),
     };
     return Promise.resolve(mockDb as unknown as IDBPDatabase<SignSpeakDB>);
   }
@@ -38,24 +44,14 @@ const getDB = () => {
     dbPromise = openDB<SignSpeakDB>(DB_NAME, DB_VERSION, {
       upgrade(db, oldVersion) {
         if (oldVersion < 1) {
-            if (!db.objectStoreNames.contains(GESTURE_STORE_NAME)) {
-                db.createObjectStore(GESTURE_STORE_NAME, { keyPath: 'label' });
-            }
+          if (!db.objectStoreNames.contains(GESTURE_STORE_NAME)) {
+            db.createObjectStore(GESTURE_STORE_NAME, { keyPath: 'label' });
+          }
         }
         if (oldVersion < 2) {
-            if (db.objectStoreNames.contains('sentences-old')) {
-                db.deleteObjectStore('sentences-old');
-            }
-            if (!db.objectStoreNames.contains(SENTENCE_STORE_NAME)) {
-                db.createObjectStore(SENTENCE_STORE_NAME, { keyPath: 'label' });
-            }
-        }
-        if (oldVersion < 3) {
-            // Re-create sentence store for new step-by-step data structure
-            if (db.objectStoreNames.contains(SENTENCE_STORE_NAME)) {
-                db.deleteObjectStore(SENTENCE_STORE_NAME);
-            }
+          if (!db.objectStoreNames.contains(SENTENCE_STORE_NAME)) {
             db.createObjectStore(SENTENCE_STORE_NAME, { keyPath: 'label' });
+          }
         }
       },
     });
@@ -70,13 +66,11 @@ export const gestureDB = {
   },
   async getAll() {
     const db = await getDB();
-    const allItems = await db.getAll(GESTURE_STORE_NAME);
-    return allItems.filter(item => item.type === 'word');
+    return db.getAll(GESTURE_STORE_NAME);
   },
   async add(gesture: Gesture) {
     const db = await getDB();
-    const gestureWithType = { ...gesture, type: 'word' as const };
-    return db.put(GESTURE_STORE_NAME, gestureWithType);
+    return db.put(GESTURE_STORE_NAME, gesture);
   },
   async delete(label: string) {
     const db = await getDB();
@@ -99,7 +93,27 @@ export const sentenceDB = {
     },
     async add(sentence: Sentence) {
       const db = await getDB();
-      return db.put(SENTENCE_STORE_NAME, sentence);
+      const tx = db.transaction([GESTURE_STORE_NAME, SENTENCE_STORE_NAME], 'readwrite');
+      const gestureStore = tx.objectStore(GESTURE_STORE_NAME);
+      const sentenceStore = tx.objectStore(SENTENCE_STORE_NAME);
+
+      const existingGestures = await gestureStore.getAll();
+      const existingGestureLabels = existingGestures.map(g => g.label.toLowerCase());
+
+      for(const gesture of sentence.gestures) {
+          if (!existingGestureLabels.includes(gesture.label.toLowerCase())) {
+              gestureStore.put({
+                  label: gesture.label,
+                  description: `Gesture for "${gesture.label}" from sentence "${sentence.label}"`,
+                  samples: gesture.samples,
+                  type: 'word'
+              });
+          }
+      }
+
+      await sentenceStore.put(sentence);
+
+      return tx.done;
     },
     async delete(label: string) {
       const db = await getDB();

@@ -3,7 +3,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useGestures } from '@/hooks/use-gestures';
-import type { Landmark, LandmarkData, Gesture, Sentence } from '@/lib/types';
+import type { Landmark, LandmarkData, Gesture, Sentence, SentenceGesture } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { WebcamView } from './webcam-view';
 import { Button } from './ui/button';
@@ -11,16 +11,14 @@ import { Input } from './ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './ui/card';
 import { Progress } from './ui/progress';
 import { ScrollArea } from './ui/scroll-area';
-import { Camera, Trash2, Loader2, CheckCircle, ArrowRight, X, Book, MessageSquare, BookOpen, Play, Square } from 'lucide-react';
-import { validateGesture } from '@/ai/flows/gesture-validation-tool';
+import { Camera, Trash2, Loader2, CheckCircle, ArrowRight, X, Book, MessageSquare, BookOpen, Play, Square, Info } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { useRouter } from 'next/navigation';
 import { Skeleton } from './ui/skeleton';
 import { Textarea } from './ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { sentenceDB } from '@/lib/db';
-import { Label } from './ui/label';
 import { useSentences } from '@/hooks/use-sentences';
+import { sentenceDB } from '@/lib/db';
 
 const WORD_SAMPLES_REQUIRED = 30;
 
@@ -96,44 +94,33 @@ function WordTrainer({ gestures, addGesture, isSaving, setIsSaving, onIsCapturin
       toast({ variant: 'destructive', title: 'Error', description: `Please capture ${WORD_SAMPLES_REQUIRED} samples.` });
       return;
     }
+    if (gestures.some(g => g.label.toLowerCase() === gestureName.trim().toLowerCase())) {
+        toast({
+            variant: 'destructive',
+            title: 'Validation Failed',
+            description: `This gesture name already exists. Please choose a different name.`,
+        });
+        return;
+    }
 
     setIsSaving(true);
 
     const normalizedSamples = capturedSamples.map(sample => normalizeLandmarks(sample));
     const newGesture: Gesture = { label: gestureName, description: gestureDescription, samples: normalizedSamples, type: 'word' };
     
-    const landmarkDataForValidation = newGesture.samples.map(sample => sample.flatMap(lm => [lm.x, lm.y, lm.z]));
-    const trainedLandmarksForValidation = gestures.reduce((acc, g) => {
-        acc[g.label] = g.samples.map(s => s.flatMap(lm => [lm.x, lm.y, lm.z]));
-        return acc;
-    }, {} as Record<string, number[][]>);
-
     try {
-        const validationResult = await validateGesture({
-            gestureName: newGesture.label,
-            landmarkData: landmarkDataForValidation,
-            trainedLandmarks: trainedLandmarksForValidation,
+        await addGesture(newGesture);
+        toast({
+            title: 'Gesture Saved!',
+            description: `${gestureName} has been trained successfully.`,
         });
+        setGestureName('');
+        setGestureDescription('');
+        setCapturedSamples([]);
 
-        if (validationResult.isValid) {
-            await addGesture(newGesture);
-            toast({
-                title: 'Gesture Saved!',
-                description: `${gestureName} has been trained successfully.`,
-            });
-            setGestureName('');
-            setGestureDescription('');
-            setCapturedSamples([]);
-        } else {
-            toast({
-                variant: 'destructive',
-                title: 'Validation Failed',
-                description: `This gesture name already exists. Please choose a different name.`,
-            });
-        }
     } catch (error) {
-        console.error("Validation error:", error);
-        toast({ variant: 'destructive', title: 'Error', description: 'An error occurred during gesture validation.' });
+        console.error("Save error:", error);
+        toast({ variant: 'destructive', title: 'Error', description: 'An error occurred during saving.' });
     } finally {
         setIsSaving(false);
     }
@@ -210,85 +197,126 @@ function WordTrainer({ gestures, addGesture, isSaving, setIsSaving, onIsCapturin
   )
 }
 
-const GESTURE_INTERVAL_MS = 100;
+function SentenceGestureCapturer({ gestureName, onCaptureComplete, lastLandmarks, isCapturing, gestures, sentences }) {
+    const [capturedSamples, setCapturedSamples] = useState<LandmarkData[]>([]);
+    const [isSaving, setIsSaving] = useState(false);
+    const { toast } = useToast();
 
-function SentenceTrainer({ onIsCapturingChange, lastLandmarks, addSentence }) {
+    const handleCapture = () => {
+        if (lastLandmarks.length === 0) {
+            toast({ variant: 'destructive', title: 'Capture Failed', description: 'No hand detected. Please make sure your hand is visible.' });
+            return;
+        }
+        if (capturedSamples.length < WORD_SAMPLES_REQUIRED) {
+            setCapturedSamples(prev => [...prev, lastLandmarks]);
+        }
+    };
+
+    const handleSave = async () => {
+        if (capturedSamples.length < WORD_SAMPLES_REQUIRED) {
+            toast({ variant: 'destructive', title: 'Error', description: `Please capture ${WORD_SAMPLES_REQUIRED} samples.` });
+            return;
+        }
+        
+        const existingWords = gestures.map(g => g.label.toLowerCase());
+        const existingSentenceWords = sentences.flatMap(s => s.gestures).map(g => g.label.toLowerCase());
+
+        if (existingWords.includes(gestureName.toLowerCase()) || existingSentenceWords.includes(gestureName.toLowerCase())) {
+             toast({
+                variant: 'destructive',
+                title: 'Gesture Exists',
+                description: `The gesture for "${gestureName}" seems to be already trained. Reusing it.`,
+            });
+            const existingGesture = gestures.find(g => g.label.toLowerCase() === gestureName.toLowerCase());
+            const gestureData: SentenceGesture = {
+                label: gestureName,
+                samples: existingGesture ? existingGesture.samples : [],
+            };
+            onCaptureComplete(gestureData);
+            return;
+        }
+
+        setIsSaving(true);
+        const normalizedSamples = capturedSamples.map(sample => normalizeLandmarks(sample));
+        const gestureData: SentenceGesture = {
+            label: gestureName,
+            samples: normalizedSamples,
+        };
+        onCaptureComplete(gestureData);
+        setIsSaving(false);
+        toast({ title: 'Gesture Captured!', description: `Gesture for "${gestureName}" is ready.` });
+    };
+
+    const progress = (capturedSamples.length / WORD_SAMPLES_REQUIRED) * 100;
+    
+    return (
+        <div className="p-4 border rounded-lg space-y-4 bg-muted/50">
+            <h3 className="font-semibold text-center text-lg">Show gesture for: <span className="text-primary">{gestureName}</span></h3>
+            <div className="flex items-center gap-4">
+                <Button onClick={handleCapture} disabled={!isCapturing || capturedSamples.length >= WORD_SAMPLES_REQUIRED || isSaving} className="flex-1">
+                    <Camera className="mr-2" /> Capture Sample
+                </Button>
+                <Progress value={progress} className="w-1/2" />
+                <span className="text-sm text-muted-foreground">{capturedSamples.length}/{WORD_SAMPLES_REQUIRED}</span>
+            </div>
+            {capturedSamples.length >= WORD_SAMPLES_REQUIRED && (
+                 <Button onClick={handleSave} disabled={isSaving} className="w-full">
+                    {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2"/>}
+                    Confirm Gesture for "{gestureName}"
+                </Button>
+            )}
+        </div>
+    );
+}
+
+function SentenceTrainer({ onIsCapturingChange, lastLandmarks, addSentence, gestures, sentences }) {
   const { toast } = useToast();
   const [sentenceLabel, setSentenceLabel] = useState('');
-  const [isRecording, setIsRecording] = useState(false);
+  const [sentenceWords, setSentenceWords] = useState<string[]>([]);
+  const [currentStep, setCurrentStep] = useState(0);
+  const [capturedGestures, setCapturedGestures] = useState<SentenceGesture[]>([]);
   const [isSaving, setIsSaving] = useState(false);
-  const [capturedSamples, setCapturedSamples] = useState<LandmarkData[][]>([]);
-  const [currentSequence, setCurrentSequence] = useState<LandmarkData[]>([]);
-  const [samplesToCollect, setSamplesToCollect] = useState(5);
-  
-  const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  
-  const startRecording = () => {
-    if (!sentenceLabel.trim()) {
-        toast({ variant: 'destructive', title: 'Error', description: 'Please enter a label for the sentence.' });
-        return;
-    }
-    if (capturedSamples.length >= samplesToCollect) {
-        toast({ title: "Sample limit reached", description: `You have already captured ${samplesToCollect} samples.` });
-        return;
-    }
 
-    setIsRecording(true);
-    setCurrentSequence([]);
-    toast({ title: 'Recording Started', description: 'Perform the gesture sequence for your sentence.' });
-
-    recordingIntervalRef.current = setInterval(() => {
-      if (lastLandmarks && lastLandmarks.length > 0) {
-        const normalizedLandmarks = normalizeLandmarks(lastLandmarks);
-        setCurrentSequence(prev => [...prev, normalizedLandmarks]);
+  const startTraining = () => {
+      const words = sentenceLabel.trim().split(/\s+/).filter(Boolean);
+      if (words.length < 2) {
+          toast({ variant: 'destructive', title: 'Error', description: 'A sentence must have at least 2 words.' });
+          return;
       }
-    }, GESTURE_INTERVAL_MS);
+      if (sentences.some(s => s.label.toLowerCase() === sentenceLabel.trim().toLowerCase())) {
+        toast({ variant: 'destructive', title: 'Error', description: 'This sentence has already been trained.' });
+        return;
+      }
+      setSentenceWords(words);
+      setCurrentStep(0);
+      setCapturedGestures([]);
   };
 
-  const stopRecording = () => {
-    setIsRecording(false);
-    if (recordingIntervalRef.current) {
-      clearInterval(recordingIntervalRef.current);
-    }
-    if (currentSequence.length > 1) { // Only save if there's a sequence
-      setCapturedSamples(prev => [...prev, currentSequence]);
-      toast({ title: 'Recording Stopped', description: `Sample captured with ${currentSequence.length} frames.` });
-    } else {
-      toast({ variant: 'destructive', title: 'Recording Too Short', description: 'Please perform a longer gesture sequence.' });
-    }
-    setCurrentSequence([]);
-  };
-
-  const handleDeleteSample = (index: number) => {
-    setCapturedSamples(prev => prev.filter((_, i) => i !== index));
+  const handleGestureCaptured = (gesture: SentenceGesture) => {
+      setCapturedGestures(prev => [...prev, gesture]);
+      setCurrentStep(prev => prev + 1);
   };
   
   const handleSaveSentence = async () => {
-    if (sentenceLabel.trim() === '') {
-      toast({ variant: 'destructive', title: 'Error', description: 'Please enter a label for the sentence.' });
-      return;
-    }
-    if (capturedSamples.length < samplesToCollect) {
-      toast({ variant: 'destructive', title: 'Error', description: `Please capture ${samplesToCollect} samples.` });
-      return;
-    }
-    
     setIsSaving(true);
     try {
-      const sentence: Sentence = {
-        label: sentenceLabel,
-        samples: capturedSamples,
+      const newSentence: Sentence = {
+        label: sentenceLabel.trim(),
+        gestures: capturedGestures,
       };
       
-      await addSentence(sentence);
+      await addSentence(newSentence);
       
       toast({
         title: 'Sentence Saved!',
-        description: `${sentenceLabel} has been trained successfully.`,
+        description: `"${newSentence.label}" has been trained successfully.`,
       });
       
+      // Reset state
       setSentenceLabel('');
-      setCapturedSamples([]);
+      setSentenceWords([]);
+      setCurrentStep(0);
+      setCapturedGestures([]);
 
     } catch (error) {
       console.error("Error saving sentence:", error);
@@ -300,91 +328,73 @@ function SentenceTrainer({ onIsCapturingChange, lastLandmarks, addSentence }) {
 
   useEffect(() => {
     onIsCapturingChange(true);
-    return () => {
-      if (recordingIntervalRef.current) {
-        clearInterval(recordingIntervalRef.current);
-      }
-    }
   }, [onIsCapturingChange]);
 
-  const progress = (capturedSamples.length / samplesToCollect) * 100;
+  const isTrainingStarted = sentenceWords.length > 0;
+  const isTrainingFinished = isTrainingStarted && currentStep >= sentenceWords.length;
 
   return (
     <CardContent className="space-y-4 pt-6">
-      <div className="space-y-2">
-        <Label htmlFor="sentence-label">Sentence</Label>
-        <Input
-          id="sentence-label"
-          placeholder="e.g., How are you?"
-          value={sentenceLabel}
-          onChange={(e) => setSentenceLabel(e.target.value)}
-          disabled={isSaving || isRecording}
-        />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="samples-to-collect">Number of Samples to Record</Label>
-        <Input
-          id="samples-to-collect"
-          type="number"
-          value={samplesToCollect}
-          onChange={(e) => setSamplesToCollect(Math.max(1, parseInt(e.target.value) || 1))}
-          disabled={isSaving || isRecording}
-        />
-      </div>
-
-      <div className="p-4 rounded-lg border bg-background text-center space-y-2">
-          <p className="text-sm text-muted-foreground">
-            {isRecording ? `Recording... Captured ${currentSequence.length} frames.` : "Ready to record a new sample."}
-          </p>
-          <Button onClick={isRecording ? stopRecording : startRecording} disabled={!sentenceLabel.trim() || isSaving}>
-            {isRecording ? <Square className="mr-2" /> : <Play className="mr-2" />}
-            {isRecording ? 'Stop Recording' : `Record Sample ${capturedSamples.length + 1}`}
-          </Button>
-      </div>
-
-      <div className="flex items-center gap-4">
-        <p className="text-sm font-medium">Progress:</p>
-        <Progress value={progress} className="w-1/2" />
-        <span className="text-sm text-muted-foreground">{capturedSamples.length}/{samplesToCollect}</span>
-      </div>
-
-      {capturedSamples.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="text-sm font-medium">Captured Sentence Samples</h3>
-          <ScrollArea className="h-24">
-            <div className="grid grid-cols-5 gap-2 pr-4">
-              {capturedSamples.map((sample, index) => (
-                <div key={index} className="relative group aspect-square bg-muted rounded-md flex items-center justify-center p-1">
-                  <span className="text-xs text-center text-muted-foreground">{sample.length} frames</span>
-                  <Button
-                    variant="destructive"
-                    size="icon"
-                    className="absolute -top-2 -right-2 h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={() => handleDeleteSample(index)}
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
-                </div>
-              ))}
+      {!isTrainingStarted ? (
+        <div className="space-y-4">
+            <Input
+                id="sentence-label"
+                placeholder="e.g., How are you?"
+                value={sentenceLabel}
+                onChange={(e) => setSentenceLabel(e.target.value)}
+                disabled={isSaving}
+            />
+            <Button onClick={startTraining} disabled={!sentenceLabel.trim() || isSaving} className="w-full">
+                Start Sentence Training
+            </Button>
+            <Alert>
+                <Info className="h-4 w-4" />
+                <AlertTitle>How it works</AlertTitle>
+                <AlertDescription>
+                   Enter a sentence. Then, you'll be asked to capture the gesture for each word one by one.
+                </AlertDescription>
+            </Alert>
+        </div>
+      ) : (
+        <div className="space-y-4">
+            <div className="text-center p-2 rounded-lg bg-background">
+                <p className="text-muted-foreground">Training Sentence:</p>
+                <h2 className="text-2xl font-bold text-primary">{sentenceLabel}</h2>
+                <p className="text-sm text-muted-foreground">Step {currentStep + 1} of {sentenceWords.length}</p>
             </div>
-          </ScrollArea>
+            
+            {!isTrainingFinished && (
+                <SentenceGestureCapturer 
+                    key={currentStep}
+                    gestureName={sentenceWords[currentStep]}
+                    onCaptureComplete={handleGestureCaptured}
+                    lastLandmarks={lastLandmarks}
+                    isCapturing={true}
+                    gestures={gestures}
+                    sentences={sentences}
+                />
+            )}
+
+            {isTrainingFinished && (
+                <div className="space-y-4">
+                    <Alert className="border-primary bg-primary/10">
+                        <CheckCircle className="h-4 w-4 text-primary" />
+                        <AlertTitle>All gestures captured!</AlertTitle>
+                        <AlertDescription>
+                           You are ready to save the full sentence.
+                        </AlertDescription>
+                    </Alert>
+                    <Button onClick={handleSaveSentence} disabled={isSaving} className="w-full" size="lg">
+                        {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <BookOpen className="mr-2"/>}
+                        Save Full Sentence
+                    </Button>
+                </div>
+            )}
+             <Button variant="outline" onClick={() => { setSentenceWords([]); setCurrentStep(0); setCapturedGestures([]); }}>
+                Cancel
+            </Button>
         </div>
       )}
-
-      {capturedSamples.length >= samplesToCollect && (
-        <Alert className="border-primary bg-primary/10">
-          <CheckCircle className="h-4 w-4 text-primary" />
-          <AlertTitle>Ready to Save!</AlertTitle>
-          <AlertDescription>
-            You have captured enough samples. Click "Save Sentence" to train the model.
-          </AlertDescription>
-        </Alert>
-      )}
-
-      <Button onClick={handleSaveSentence} disabled={capturedSamples.length < samplesToCollect || isSaving || isRecording} className="w-full" size="lg">
-        {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <BookOpen className="mr-2"/>}
-        Save Sentence
-      </Button>
     </CardContent>
   );
 }
@@ -444,6 +454,8 @@ export function GestureTrainer() {
                     onIsCapturingChange={setIsCapturing} 
                     lastLandmarks={lastLandmarks} 
                     addSentence={addSentence} 
+                    gestures={gestures}
+                    sentences={sentences}
                   />
               </TabsContent>
           </Tabs>
@@ -488,7 +500,10 @@ export function GestureTrainer() {
                               <div className="space-y-2">
                               {sentences.map((sentence) => (
                                   <div key={sentence.label} className="flex items-center justify-between p-3 rounded-lg bg-background hover:bg-muted/50 transition-colors">
-                                  <p className="font-medium">{sentence.label}</p>
+                                  <div className="flex-1">
+                                    <p className="font-medium">{sentence.label}</p>
+                                    <p className="text-sm text-muted-foreground">{sentence.gestures.map(g => g.label).join(' → ')}</p>
+                                  </div>
                                   <Button variant="ghost" size="icon" onClick={() => deleteSentence(sentence.label)} aria-label={`Delete ${sentence.label}`}>
                                       <Trash2 className="h-4 w-4 text-destructive" />
                                   </Button>

@@ -2,20 +2,20 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import type { Gesture, Landmark } from '@/lib/types';
+import type { Gesture, Landmark, SentenceGesture } from '@/lib/types';
 import { WebcamView } from './webcam-view';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { gestureDB } from '@/lib/db';
+import { gestureDB, sentenceDB } from '@/lib/db';
 import { Skeleton } from './ui/skeleton';
 import { BarChart, Hand, History, MessageSquare, Play, Square } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
-import { SentenceDetector } from './sentence-detector';
+import { useSentences } from '@/hooks/use-sentences';
 
 const CONFIDENCE_THRESHOLD = 0.8;
-const FRAME_CONSISTENCY_COUNT = 3;
-const DETECTION_INTERVAL_MS = 50; 
+const SEQUENCE_TIMEOUT_MS = 7000;
+const DETECTION_INTERVAL_MS = 100;
 
 function normalizeLandmarks(landmarks: Landmark[]): Landmark[] {
     if (landmarks.length === 0) return [];
@@ -53,11 +53,11 @@ function normalizeLandmarks(landmarks: Landmark[]): Landmark[] {
 
 function kNearestNeighbors(
   inputLandmarks: Landmark[],
-  trainedGestures: {label: string; samples: Landmark[][]}[],
+  trainedGestures: (Gesture | SentenceGesture)[],
   k: number = 3
 ): {label: string; confidence: number} {
   if (!trainedGestures || trainedGestures.length === 0) {
-    return {label: 'No gestures trained', confidence: 0};
+    return {label: 'Unknown', confidence: 0};
   }
 
   const distances: {label: string; distance: number}[] = [];
@@ -84,7 +84,7 @@ function kNearestNeighbors(
   const neighborCounts: {[label: string]: number} = {};
   nearestNeighbors.forEach(n => neighborCounts[n.label] = (neighborCounts[n.label] || 0) + 1);
 
-  let predictedLabel = '';
+  let predictedLabel = 'Unknown';
   let maxCount = 0;
   for (const label in neighborCounts) {
     if (neighborCounts[label] > maxCount) {
@@ -97,38 +97,34 @@ function kNearestNeighbors(
   return {label: predictedLabel, confidence};
 }
 
-function verifyMultiFrameConsistency(
-    detectedGestures: string[],
-    requiredConsistency: number
-): { isValidGesture: boolean; consistentGesture?: string } {
-    if (detectedGestures.length < requiredConsistency) return { isValidGesture: false };
-    const lastGestures = detectedGestures.slice(-requiredConsistency);
-    const firstGesture = lastGestures[0];
-    const isConsistent = lastGestures.every(g => g === firstGesture);
-    return { isValidGesture: isConsistent, consistentGesture: isConsistent ? firstGesture : undefined };
-}
 
 export function GestureDetector() {
-  const [trainedGestures, setTrainedGestures] = useState<Gesture[]>([]);
+  const [trainedWords, setTrainedWords] = useState<Gesture[]>([]);
+  const { sentences: trainedSentences, isLoading: isSentencesLoading } = useSentences();
   const [isLoading, setIsLoading] = useState(true);
   const [isDetecting, setIsDetecting] = useState(false);
   
   const [wordResult, setWordResult] = useState<{ label: string; confidence: number } | null>(null);
   const [wordHistory, setWordHistory] = useState<string[]>([]);
-  const [sentenceResult, setSentenceResult] = useState<{ label: string; confidence: number } | null>(null);
+  const [sentenceResult, setSentenceResult] = useState<string | null>(null);
+  const [currentSequence, setCurrentSequence] = useState<string[]>([]);
   
-  const recentDetectionsRef = useRef<string[]>([]);
-  const landmarkBufferRef = useRef<Landmark[][]>([]);
+  const sequenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastDetectionTimeRef = useRef(0);
+  const lastRecognizedWordRef = useRef<{ label: string, timestamp: number } | null>(null);
+
   const { toast } = useToast();
 
+  const allTrainedGestures = trainedSentences.flatMap(s => s.gestures);
+
   useEffect(() => {
-    const loadGestures = async () => {
+    const loadData = async () => {
       setIsLoading(true);
-      const gestures = await gestureDB.getAll();
-      setTrainedGestures(gestures);
+      const words = await gestureDB.getAll();
+      const sentences = await sentenceDB.getAll();
+      setTrainedWords(words);
       setIsLoading(false);
-      if (gestures.length === 0) {
+      if (words.length === 0 && sentences.length === 0) {
         toast({
           title: 'No Gestures Trained',
           description: 'Please go to the training page to add words or sentences first.',
@@ -136,39 +132,63 @@ export function GestureDetector() {
         });
       }
     };
-    loadGestures();
+    loadData();
   }, [toast]);
 
-  const handleWordDetection = useCallback((landmarks: Landmark[]) => {
-    if (trainedGestures.length === 0) return;
-
-    const knnResult = kNearestNeighbors(landmarks, trainedGestures, 3);
-    
-    if (knnResult.confidence > CONFIDENCE_THRESHOLD && knnResult.label !== 'No gestures trained' && knnResult.label !== 'Unknown') {
-        recentDetectionsRef.current.push(knnResult.label);
-        if (recentDetectionsRef.current.length > FRAME_CONSISTENCY_COUNT * 2) {
-            recentDetectionsRef.current.shift();
-        }
-
-        const verificationResult = verifyMultiFrameConsistency(recentDetectionsRef.current, FRAME_CONSISTENCY_COUNT);
-        
-        if (verificationResult.isValidGesture && verificationResult.consistentGesture) {
-             if (wordResult?.label !== verificationResult.consistentGesture) {
-                setWordResult({ label: verificationResult.consistentGesture, confidence: knnResult.confidence });
-                setWordHistory(prev => [verificationResult.consistentGesture!, ...prev].slice(0, 5));
-                recentDetectionsRef.current = [];
-             }
-        }
-    } else {
-       if (recentDetectionsRef.current.length > 0) recentDetectionsRef.current.shift();
+  const resetSequence = useCallback(() => {
+    setCurrentSequence([]);
+    if (sequenceTimeoutRef.current) {
+        clearTimeout(sequenceTimeoutRef.current);
+        sequenceTimeoutRef.current = null;
     }
-  }, [trainedGestures, wordResult]);
+  }, []);
+
+  const handleDetection = useCallback((landmarks: Landmark[]) => {
+    if (trainedWords.length === 0 && allTrainedGestures.length === 0) return;
+
+    const combinedGestureSet = [...trainedWords, ...allTrainedGestures];
+    const knnResult = kNearestNeighbors(landmarks, combinedGestureSet, 3);
+    
+    if (knnResult.confidence > CONFIDENCE_THRESHOLD && knnResult.label !== 'Unknown') {
+        const now = Date.now();
+        // Debounce recognition of the same word
+        if (lastRecognizedWordRef.current?.label === knnResult.label && now - lastRecognizedWordRef.current.timestamp < 1000) {
+            return;
+        }
+
+        setWordResult({ label: knnResult.label, confidence: knnResult.confidence });
+        setWordHistory(prev => [knnResult.label, ...prev].slice(0, 5));
+        lastRecognizedWordRef.current = { label: knnResult.label, timestamp: now };
+
+        // Sentence logic
+        const newSequence = [...currentSequence, knnResult.label];
+        setCurrentSequence(newSequence);
+        
+        // Reset timeout
+        if (sequenceTimeoutRef.current) clearTimeout(sequenceTimeoutRef.current);
+        sequenceTimeoutRef.current = setTimeout(resetSequence, SEQUENCE_TIMEOUT_MS);
+
+        // Check for sentence match
+        for (const sentence of trainedSentences) {
+            if (newSequence.length === sentence.gestures.length) {
+                const isMatch = sentence.gestures.every((g, i) => g.label === newSequence[i]);
+                if (isMatch) {
+                    setSentenceResult(sentence.label);
+                    setWordResult(null); // Clear word result
+                    resetSequence();
+                    return; // Exit after match
+                }
+            }
+        }
+    }
+  }, [trainedWords, allTrainedGestures, currentSequence, trainedSentences, resetSequence]);
+
 
   const handleLandmarks = useCallback((landmarks: Landmark[], worldLandmarks: Landmark[]) => {
     if (!isDetecting) {
         setWordResult(null);
         setSentenceResult(null);
-        landmarkBufferRef.current = [];
+        resetSequence();
         return;
     }
     if (worldLandmarks.length === 0) return;
@@ -180,25 +200,24 @@ export function GestureDetector() {
     lastDetectionTimeRef.current = now;
 
     const normalizedLandmarks = normalizeLandmarks(worldLandmarks);
-    handleWordDetection(normalizedLandmarks);
+    handleDetection(normalizedLandmarks);
+  }, [isDetecting, handleDetection, resetSequence]);
 
-    // Add to sentence detection buffer
-    landmarkBufferRef.current.push(normalizedLandmarks);
-  }, [isDetecting, handleWordDetection]);
-
-  const handleSentenceDetection = useCallback((result: {label: string, confidence: number} | null) => {
-    if (result) {
-        setSentenceResult(result);
-        // Clear word result if a sentence is found to avoid confusion
-        setWordResult(null); 
+  useEffect(() => {
+    // Clear sentence result after a few seconds
+    if(sentenceResult) {
+        const timer = setTimeout(() => setSentenceResult(null), 5000);
+        return () => clearTimeout(timer);
     }
-  }, []);
+  }, [sentenceResult]);
+
+  const isLoadingData = isLoading || isSentencesLoading;
 
   return (
     <div className="grid lg:grid-cols-3 gap-8 p-4 md:p-6">
       <div className="lg:col-span-2 space-y-4">
         <WebcamView onLandmarks={handleLandmarks} isCapturing={isDetecting} className="w-full aspect-video" />
-         <Button onClick={() => setIsDetecting(!isDetecting)} size="lg" className="w-full" disabled={isLoading}>
+         <Button onClick={() => setIsDetecting(!isDetecting)} size="lg" className="w-full" disabled={isLoadingData}>
           {isDetecting ? <><Square className="mr-2" />Stop Detection</> : <><Play className="mr-2" />Start Detection</>}
         </Button>
       </div>
@@ -210,9 +229,9 @@ export function GestureDetector() {
             </CardTitle>
           </CardHeader>
           <CardContent className="text-center min-h-[120px] flex flex-col justify-center items-center">
-            {isLoading ? ( <Skeleton className="w-3/4 h-16" /> ) 
+            {isLoadingData ? ( <Skeleton className="w-3/4 h-16" /> ) 
             : !isDetecting ? ( <p className="text-xl text-muted-foreground">Press Start to Detect</p> )
-            : wordResult ? (
+            : wordResult && !sentenceResult ? (
               <>
                 <p className="text-5xl font-bold text-primary truncate">{wordResult.label}</p>
                 <Badge variant="secondary" className="mt-4 flex items-center gap-1">
@@ -223,17 +242,34 @@ export function GestureDetector() {
             ) : !sentenceResult ? (
               <p className="text-xl text-muted-foreground">Show a trained gesture...</p>
             ) : (
-              <p className="text-xl text-muted-foreground">-</p>
+                <p className="text-xl text-muted-foreground">-</p>
             )}
           </CardContent>
         </Card>
         
-        <SentenceDetector 
-          isDetecting={isDetecting} 
-          landmarkBufferRef={landmarkBufferRef} 
-          onDetection={handleSentenceDetection}
-          result={sentenceResult}
-        />
+        <Card className="glass-card h-fit">
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-2xl">
+                    <MessageSquare /> Detected Sentence
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="text-center min-h-[120px] flex flex-col justify-center items-center">
+                {isLoadingData ? ( <Skeleton className="w-3/4 h-16" /> )
+                : !isDetecting ? ( <p className="text-xl text-muted-foreground">Detection stopped</p> )
+                : sentenceResult ? (
+                  <>
+                    <p className="text-4xl font-bold text-accent truncate">{sentenceResult}</p>
+                  </>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-xl text-muted-foreground">Listening for sentences...</p>
+                    <p className="text-sm text-muted-foreground h-4">
+                        {currentSequence.join(' → ')}
+                    </p>
+                  </div>
+                )}
+            </CardContent>
+        </Card>
 
         <Card className="glass-card">
           <CardHeader>
@@ -260,3 +296,4 @@ export function GestureDetector() {
     </div>
   );
 }
+
