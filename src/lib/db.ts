@@ -33,6 +33,7 @@ const getDB = () => {
       transaction: () => ({
         objectStore: () => ({
           getAll: async () => [],
+          put: async () => {}
         }),
         done: Promise.resolve(),
       }),
@@ -66,7 +67,7 @@ export const gestureDB = {
   },
   async getAll() {
     const db = await getDB();
-    return db.getAll(GESTURE_STORE_name);
+    return db.getAll(GESTURE_STORE_NAME);
   },
   async add(gesture: Gesture) {
     const db = await getDB();
@@ -92,28 +93,29 @@ export const sentenceDB = {
       return db.getAll(SENTENCE_STORE_NAME);
     },
     async add(sentence: Sentence) {
-      const db = await getDB();
-      const tx = db.transaction([GESTURE_STORE_NAME, SENTENCE_STORE_NAME], 'readwrite');
-      const gestureStore = tx.objectStore(GESTURE_STORE_NAME);
-      const sentenceStore = tx.objectStore(SENTENCE_STORE_NAME);
+        const db = await getDB();
+        const tx = db.transaction([GESTURE_STORE_NAME, SENTENCE_STORE_NAME], 'readwrite');
+        const gestureStore = tx.objectStore(GESTURE_STORE_NAME);
+        const sentenceStore = tx.objectStore(SENTENCE_STORE_NAME);
 
-      const existingGestureLabels = (await gestureStore.getAll()).map(g => g.label.toLowerCase());
+        const allGestures = await gestureStore.getAll();
+        const existingGestureLabels = allGestures.map(g => g.label.toLowerCase());
 
-      for(const gesture of sentence.gestures) {
-          // Add the gesture to the main gesture store only if it's a new, unique gesture
-          if (!existingGestureLabels.includes(gesture.label.toLowerCase())) {
-              await gestureStore.put({
-                  label: gesture.label,
-                  description: `Gesture for "${gesture.label}" from sentence "${sentence.label}"`,
-                  samples: gesture.samples,
-                  type: 'word'
-              });
-          }
-      }
+        for (const gesture of sentence.gestures) {
+            if (!existingGestureLabels.includes(gesture.label.toLowerCase())) {
+                const newWordGesture: Gesture = {
+                    label: gesture.label,
+                    description: `Gesture for "${gesture.label}" from sentence "${sentence.label}"`,
+                    samples: gesture.samples,
+                    type: 'word'
+                };
+                await gestureStore.put(newWordGesture);
+                existingGestureLabels.push(gesture.label.toLowerCase());
+            }
+        }
 
-      await sentenceStore.put(sentence);
-
-      return tx.done;
+        await sentenceStore.put(sentence);
+        return tx.done;
     },
     async delete(label: string) {
       const db = await getDB();

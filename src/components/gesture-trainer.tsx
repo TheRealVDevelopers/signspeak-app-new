@@ -372,7 +372,9 @@ function SentenceTrainer({ onIsCapturingChange, lastLandmarks, addSentence, gest
             <div className="text-center p-2 rounded-lg bg-background">
                 <p className="text-muted-foreground">Training Sentence:</p>
                 <h2 className="text-2xl font-bold text-primary">{sentenceLabel}</h2>
-                <p className="text-sm text-muted-foreground">Step {currentStep + 1} of {sentenceWords.length}</p>
+                {!isTrainingFinished && (
+                  <p className="text-sm text-muted-foreground">Step {currentStep + 1} of {sentenceWords.length}</p>
+                )}
             </div>
             
             {!isTrainingFinished && (
