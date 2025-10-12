@@ -219,7 +219,7 @@ function SentenceGestureCapturer({ gestureName, onCaptureComplete, lastLandmarks
         }
         
         const existingGesture = gestures.find(g => g.label.toLowerCase() === gestureName.toLowerCase());
-        const allSentenceGestures = sentences.flatMap(s => s.gestures);
+        const allSentenceGestures = sentences.filter(s => s.gestures).flatMap(s => s.gestures);
         const existingInSentence = allSentenceGestures.find(g => g.label.toLowerCase() === gestureName.toLowerCase());
 
         if (existingGesture || existingInSentence) {
@@ -274,48 +274,38 @@ function SentenceTrainer({ onIsCapturingChange, lastLandmarks, addSentence, gest
   const [currentStep, setCurrentStep] = useState(0);
   const [capturedGestures, setCapturedGestures] = useState<SentenceGesture[]>([]);
   const [isSaving, setIsSaving] = useState(false);
-  
-  const handleSaveSentence = useCallback(async (finalGestures: SentenceGesture[]) => {
-    if (isSaving) return;
-    
-    if (finalGestures.length !== sentenceWords.length) {
-      console.error("Mismatch between captured gestures and sentence words.");
-      toast({ variant: 'destructive', title: 'Error', description: 'Could not save the sentence. Data mismatch.' });
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      const newSentence: Sentence = {
-        label: sentenceLabel.trim(),
-        gestures: finalGestures,
-      };
-      
-      await addSentence(newSentence);
-      
-      toast({
-        title: 'Sentence Saved!',
-        description: `"${newSentence.label}" has been trained successfully.`,
-      });
-      
-      setSentenceLabel('');
-      setSentenceWords([]);
-      setCurrentStep(0);
-      setCapturedGestures([]);
-
-    } catch (error) {
-      console.error("Error saving sentence:", error);
-      toast({ variant: 'destructive', title: 'Error', description: 'Could not save the sentence.' });
-    } finally {
-        setIsSaving(false);
-    }
-  }, [sentenceLabel, sentenceWords, addSentence, toast, isSaving]);
 
   useEffect(() => {
     if (sentenceWords.length > 0 && capturedGestures.length === sentenceWords.length) {
-      handleSaveSentence(capturedGestures);
+      const handleSaveSentence = async () => {
+        if (isSaving) return;
+        
+        setIsSaving(true);
+        try {
+          const newSentence: Sentence = {
+            label: sentenceLabel.trim(),
+            gestures: capturedGestures,
+          };
+          
+          await addSentence(newSentence);
+          
+          toast({
+            title: 'Sentence Saved!',
+            description: `"${newSentence.label}" has been trained successfully.`,
+          });
+          
+          resetTraining();
+    
+        } catch (error) {
+          console.error("Error saving sentence:", error);
+          toast({ variant: 'destructive', title: 'Error', description: 'Could not save the sentence.' });
+        } finally {
+            setIsSaving(false);
+        }
+      };
+      handleSaveSentence();
     }
-  }, [capturedGestures, sentenceWords.length, handleSaveSentence]);
+  }, [capturedGestures, sentenceWords, sentenceLabel, addSentence, toast, isSaving]);
 
 
   const startTraining = () => {
@@ -343,8 +333,7 @@ function SentenceTrainer({ onIsCapturingChange, lastLandmarks, addSentence, gest
   };
 
   const handleGestureCaptured = (gesture: SentenceGesture) => {
-      const newCapturedGestures = [...capturedGestures, gesture];
-      setCapturedGestures(newCapturedGestures);
+      setCapturedGestures(prev => [...prev, gesture]);
       setCurrentStep(prev => prev + 1);
   };
 
@@ -353,7 +342,7 @@ function SentenceTrainer({ onIsCapturingChange, lastLandmarks, addSentence, gest
   }, [onIsCapturingChange]);
 
   const isTrainingStarted = sentenceWords.length > 0;
-  const isTrainingFinished = isTrainingStarted && currentStep >= sentenceWords.length;
+  const isTrainingInProgress = isTrainingStarted && currentStep < sentenceWords.length;
 
   return (
     <CardContent className="space-y-4 pt-6">
@@ -382,12 +371,12 @@ function SentenceTrainer({ onIsCapturingChange, lastLandmarks, addSentence, gest
             <div className="text-center p-2 rounded-lg bg-background">
                 <p className="text-muted-foreground">Training Sentence:</p>
                 <h2 className="text-2xl font-bold text-primary">{sentenceLabel}</h2>
-                {!isTrainingFinished && (
-                  <p className="text-sm text-muted-foreground">Step {currentStep + 1} of {sentenceWords.length}</p>
-                )}
+                <p className="text-sm text-muted-foreground">
+                  {isTrainingInProgress ? `Step ${currentStep + 1} of ${sentenceWords.length}` : (isSaving ? 'Saving...' : 'Finished!')}
+                </p>
             </div>
             
-            {!isTrainingFinished ? (
+            {isTrainingInProgress ? (
                 <SentenceGestureCapturer 
                     key={currentStep}
                     gestureName={sentenceWords[currentStep]}
@@ -552,3 +541,5 @@ export function GestureTrainer() {
     </div>
   );
 }
+
+    
