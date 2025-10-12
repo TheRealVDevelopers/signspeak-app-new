@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { useGestures } from '@/hooks/use-gestures';
-import type { Landmark, LandmarkData, Gesture } from '@/lib/types';
+import type { Landmark, LandmarkData, Gesture, Sentence } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { WebcamView } from './webcam-view';
 import { Button } from './ui/button';
@@ -208,12 +208,106 @@ function WordTrainer({ gestures, addGesture, isSaving, setIsSaving, onIsCapturin
   )
 }
 
+function SentenceGestureCapturer({
+  gestureNumber,
+  totalGestures,
+  lastLandmarks,
+  onSamplesCollected,
+  initialSamples = [],
+}) {
+  const [capturedSamples, setCapturedSamples] = useState<LandmarkData[]>(initialSamples);
+  const { toast } = useToast();
+
+  const handleCapture = () => {
+    if (lastLandmarks.length === 0) {
+      toast({
+        variant: 'destructive',
+        title: 'Capture Failed',
+        description: 'No hand detected. Please make sure your hand is visible.',
+      });
+      return;
+    }
+    if (capturedSamples.length < SAMPLES_REQUIRED) {
+      const newSamples = [...capturedSamples, lastLandmarks];
+      setCapturedSamples(newSamples);
+      onSamplesCollected(newSamples);
+    }
+  };
+
+  const handleDeleteSample = (index: number) => {
+    const newSamples = capturedSamples.filter((_, i) => i !== index);
+    setCapturedSamples(newSamples);
+    onSamplesCollected(newSamples);
+  };
+
+  const progress = (capturedSamples.length / SAMPLES_REQUIRED) * 100;
+
+  return (
+    <div className="space-y-4 rounded-lg border bg-background p-4">
+       <Alert>
+          <BookOpen className="h-4 w-4" />
+          <AlertTitle>Capturing Gesture {gestureNumber} of {totalGestures}</AlertTitle>
+          <AlertDescription>
+              Capture {SAMPLES_REQUIRED} samples for this gesture in the sequence.
+          </AlertDescription>
+       </Alert>
+      
+      <div className="flex items-center gap-4">
+        <Button onClick={handleCapture} disabled={capturedSamples.length >= SAMPLES_REQUIRED} className="flex-1">
+          <Camera className="mr-2" /> Capture Sample
+        </Button>
+        <Progress value={progress} className="w-1/2" />
+        <span className="text-sm text-muted-foreground">{capturedSamples.length}/{SAMPLES_REQUIRED}</span>
+      </div>
+
+      {capturedSamples.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-medium">Captured Samples</h3>
+          <ScrollArea className="h-24">
+            <div className="grid grid-cols-5 gap-2 pr-4">
+              {capturedSamples.map((sample, index) => (
+                <div key={index} className="relative group aspect-square bg-muted rounded-md flex items-center justify-center">
+                  <span className="text-xs text-muted-foreground">{index + 1}</span>
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    className="absolute -top-2 -right-2 h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={() => handleDeleteSample(index)}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        </div>
+      )}
+
+      {capturedSamples.length >= SAMPLES_REQUIRED && (
+        <Alert className="border-primary bg-primary/10">
+          <CheckCircle className="h-4 w-4 text-primary" />
+          <AlertTitle>Gesture Complete!</AlertTitle>
+          <AlertDescription>
+            Use the arrows to move to the next gesture.
+          </AlertDescription>
+        </Alert>
+      )}
+    </div>
+  );
+}
+
+
 function SentenceTrainer({ gestures, onIsCapturingChange, lastLandmarks, isCapturing }) {
     const { toast } = useToast();
     const [sentenceLabel, setSentenceLabel] = useState('');
     const [numberOfGestures, setNumberOfGestures] = useState(1);
     const [currentStep, setCurrentStep] = useState(0); // 0: setup, 1...n: capturing gesture n
     const [isSaving, setIsSaving] = useState(false);
+    const [sentenceGestures, setSentenceGestures] = useState<LandmarkData[][]>([]);
+
+    useEffect(() => {
+        onIsCapturingChange(true);
+    }, [onIsCapturingChange]);
 
     const startTraining = () => {
         if (sentenceLabel.trim() === '') {
@@ -224,6 +318,7 @@ function SentenceTrainer({ gestures, onIsCapturingChange, lastLandmarks, isCaptu
             toast({ variant: 'destructive', title: 'Error', description: 'Number of gestures must be greater than zero.' });
             return;
         }
+        setSentenceGestures(Array(numberOfGestures).fill([]));
         setCurrentStep(1);
     }
     
@@ -231,7 +326,54 @@ function SentenceTrainer({ gestures, onIsCapturingChange, lastLandmarks, isCaptu
         setSentenceLabel('');
         setNumberOfGestures(1);
         setCurrentStep(0);
+        setSentenceGestures([]);
+        setIsSaving(false);
     }
+
+    const handleSamplesCollected = (samples: LandmarkData[], index: number) => {
+        const newSentenceGestures = [...sentenceGestures];
+        newSentenceGestures[index] = samples;
+        setSentenceGestures(newSentenceGestures);
+    };
+    
+    const handleSaveSentence = async () => {
+        if (sentenceLabel.trim() === '') {
+            toast({ variant: 'destructive', title: 'Error', description: 'Please enter a label for the sentence.' });
+            return;
+        }
+        const hasIncompleteGestures = sentenceGestures.some(g => g.length < SAMPLES_REQUIRED);
+        if (hasIncompleteGestures) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Please complete all gestures in the sequence.' });
+            return;
+        }
+        
+        setIsSaving(true);
+        try {
+            const sentence: Sentence = {
+                label: sentenceLabel,
+                sequence: sentenceGestures.map((samples, index) => ({
+                    label: `${sentenceLabel}-part-${index+1}`,
+                    description: `Part ${index+1} of sentence '${sentenceLabel}'`,
+                    samples: samples.map(s => normalizeLandmarks(s)),
+                    type: 'sentence-part'
+                }))
+            };
+            await sentenceDB.add(sentence);
+            toast({
+                title: 'Sentence Saved!',
+                description: `${sentenceLabel} has been trained successfully.`,
+            });
+            resetTraining();
+        } catch(error) {
+            console.error("Error saving sentence:", error);
+            toast({ variant: 'destructive', title: 'Error', description: 'Could not save the sentence.' });
+        } finally {
+            setIsSaving(false);
+        }
+    }
+
+    const allGesturesComplete = !sentenceGestures.some(g => g.length < SAMPLES_REQUIRED);
+
 
     if (currentStep > 0) {
         return (
@@ -253,18 +395,18 @@ function SentenceTrainer({ gestures, onIsCapturingChange, lastLandmarks, isCaptu
                     </Button>
                 </div>
                 
-                <Alert>
-                    <BookOpen className="h-4 w-4" />
-                    <AlertTitle>Capturing Gesture {currentStep}</AlertTitle>
-                    <AlertDescription>
-                        This part is under construction. In the next step, you will be able to capture samples for this gesture.
-                    </AlertDescription>
-                </Alert>
+                <SentenceGestureCapturer 
+                    gestureNumber={currentStep}
+                    totalGestures={numberOfGestures}
+                    lastLandmarks={lastLandmarks}
+                    onSamplesCollected={(samples) => handleSamplesCollected(samples, currentStep - 1)}
+                    initialSamples={sentenceGestures[currentStep - 1] || []}
+                />
 
                 <div className="flex gap-2">
-                    <Button onClick={() => {}} className="w-full" disabled>
-                        {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                        Complete Sentence
+                    <Button onClick={handleSaveSentence} className="w-full" disabled={!allGesturesComplete || isSaving}>
+                        {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Complete & Save Sentence
                     </Button>
                     <Button variant="outline" onClick={resetTraining}>Cancel</Button>
                 </div>
@@ -297,12 +439,6 @@ function SentenceTrainer({ gestures, onIsCapturingChange, lastLandmarks, isCaptu
             <Button className="w-full" onClick={startTraining} disabled={!sentenceLabel.trim() || numberOfGestures <= 0}>
                 Start Sentence Training <ArrowRight className="ml-2"/>
             </Button>
-            <Alert variant="destructive">
-              <AlertTitle>Under Construction</AlertTitle>
-              <AlertDescription>
-                Full sentence training and detection is not yet implemented. This is a preview of the setup process.
-              </AlertDescription>
-            </Alert>
         </CardContent>
     )
 }

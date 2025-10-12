@@ -12,10 +12,10 @@ export interface Gesture {
   description: string;
   samples: LandmarkData[];
   // type is optional for backward compatibility
-  type?: 'word';
+  type?: 'word' | 'sentence-part';
 }
 
 export interface Sentence {
   label: string; // The full sentence text
-  words: Gesture[]; // Array of gesture objects, one for each word
+  sequence: Gesture[]; // Array of gesture objects, one for each word/part
 }
