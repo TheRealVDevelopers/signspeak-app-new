@@ -17,7 +17,7 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ['Roboto', 'sans-serif'],
+        sans: ['PT Sans', 'sans-serif'],
         code: ['monospace'],
       },
       colors: {

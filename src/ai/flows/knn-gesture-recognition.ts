@@ -1,5 +1,3 @@
-'use server';
-
 /**
  * @fileOverview Recognizes hand gestures using a K-Nearest Neighbors (KNN) algorithm.
  *
@@ -8,8 +6,7 @@
  * - KNNGestureRecognitionOutput - The return type for the knnGestureRecognition function.
  */
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import {z} from 'zod';
 
 const KNNGestureRecognitionInputSchema = z.object({
   landmarks: z.array(
@@ -93,23 +90,12 @@ function kNearestNeighbors(
 }
 
 export async function knnGestureRecognition(input: KNNGestureRecognitionInput): Promise<KNNGestureRecognitionOutput> {
-  return knnGestureRecognitionFlow(input);
+  const {landmarks, trainedGestures} = input;
+
+  const {label, confidence} = kNearestNeighbors(
+    landmarks,
+    trainedGestures,
+  );
+
+  return {recognizedGesture: label, confidence: confidence};
 }
-
-const knnGestureRecognitionFlow = ai.defineFlow(
-  {
-    name: 'knnGestureRecognitionFlow',
-    inputSchema: KNNGestureRecognitionInputSchema,
-    outputSchema: KNNGestureRecognitionOutputSchema,
-  },
-  async input => {
-    const {landmarks, trainedGestures} = input;
-
-    const {label, confidence} = kNearestNeighbors(
-      landmarks,
-      trainedGestures,
-    );
-
-    return {recognizedGesture: label, confidence: confidence};
-  }
-);
