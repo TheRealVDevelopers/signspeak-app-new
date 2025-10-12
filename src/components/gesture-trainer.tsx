@@ -218,36 +218,6 @@ function SentenceGestureCapturer({ gestureName, onCaptureComplete, lastLandmarks
             return;
         }
         
-        const existingWord = gestures.find(g => g.label.toLowerCase() === gestureName.toLowerCase());
-        const existingSentenceGesture = sentences.flatMap(s => s.gestures).find(g => g.label.toLowerCase() === gestureName.toLowerCase());
-
-        if (existingWord) {
-             toast({
-                title: 'Reusing Gesture',
-                description: `The gesture for "${gestureName}" is already trained as a word. Reusing it.`,
-            });
-            const gestureData: SentenceGesture = {
-                label: gestureName,
-                samples: existingWord.samples,
-            };
-            onCaptureComplete(gestureData);
-            return;
-        }
-
-        if (existingSentenceGesture) {
-            toast({
-                title: 'Reusing Gesture',
-                description: `The gesture for "${gestureName}" was found in another sentence. Reusing it.`,
-            });
-            const gestureData: SentenceGesture = {
-                label: gestureName,
-                samples: existingSentenceGesture.samples,
-            };
-            onCaptureComplete(gestureData);
-            return;
-        }
-
-
         setIsSaving(true);
         const normalizedSamples = capturedSamples.map(sample => normalizeLandmarks(sample));
         const gestureData: SentenceGesture = {
@@ -305,16 +275,23 @@ function SentenceTrainer({ onIsCapturingChange, lastLandmarks, addSentence, gest
   };
 
   const handleGestureCaptured = (gesture: SentenceGesture) => {
-      setCapturedGestures(prev => [...prev, gesture]);
+      setCapturedGestures(prev => {
+          const newCapturedGestures = [...prev, gesture];
+          if (newCapturedGestures.length === sentenceWords.length) {
+              // This was the last gesture, now we can save.
+              handleSaveSentence(newCapturedGestures);
+          }
+          return newCapturedGestures;
+      });
       setCurrentStep(prev => prev + 1);
   };
   
-  const handleSaveSentence = async () => {
+  const handleSaveSentence = async (finalCapturedGestures: SentenceGesture[]) => {
     setIsSaving(true);
     try {
       const newSentence: Sentence = {
         label: sentenceLabel.trim(),
-        gestures: capturedGestures,
+        gestures: finalCapturedGestures,
       };
       
       await addSentence(newSentence);
@@ -377,7 +354,7 @@ function SentenceTrainer({ onIsCapturingChange, lastLandmarks, addSentence, gest
                 )}
             </div>
             
-            {!isTrainingFinished && (
+            {!isTrainingFinished ? (
                 <SentenceGestureCapturer 
                     key={currentStep}
                     gestureName={sentenceWords[currentStep]}
@@ -387,21 +364,16 @@ function SentenceTrainer({ onIsCapturingChange, lastLandmarks, addSentence, gest
                     gestures={gestures}
                     sentences={sentences}
                 />
-            )}
-
-            {isTrainingFinished && (
-                <div className="space-y-4">
+            ) : (
+                 <div className="space-y-4">
                     <Alert className="border-primary bg-primary/10">
                         <CheckCircle className="h-4 w-4 text-primary" />
                         <AlertTitle>All gestures captured!</AlertTitle>
                         <AlertDescription>
-                           You are ready to save the full sentence.
+                           Sentence is being saved.
                         </AlertDescription>
                     </Alert>
-                    <Button onClick={handleSaveSentence} disabled={isSaving} className="w-full" size="lg">
-                        {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <BookOpen className="mr-2"/>}
-                        Save Full Sentence
-                    </Button>
+                    {isSaving && <div className="flex justify-center items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Saving...</div>}
                 </div>
             )}
              <Button variant="outline" onClick={() => { setSentenceWords([]); setCurrentStep(0); setCapturedGestures([]); }}>
