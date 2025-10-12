@@ -218,23 +218,35 @@ function SentenceGestureCapturer({ gestureName, onCaptureComplete, lastLandmarks
             return;
         }
         
-        const existingWords = gestures.map(g => g.label.toLowerCase());
-        const existingSentenceWords = sentences.flatMap(s => s.gestures).map(g => g.label.toLowerCase());
+        const existingWord = gestures.find(g => g.label.toLowerCase() === gestureName.toLowerCase());
+        const existingSentenceGesture = sentences.flatMap(s => s.gestures).find(g => g.label.toLowerCase() === gestureName.toLowerCase());
 
-        if (existingWords.includes(gestureName.toLowerCase()) || existingSentenceWords.includes(gestureName.toLowerCase())) {
+        if (existingWord) {
              toast({
-                variant: 'destructive',
-                title: 'Gesture Exists',
-                description: `The gesture for "${gestureName}" seems to be already trained. Reusing it.`,
+                title: 'Reusing Gesture',
+                description: `The gesture for "${gestureName}" is already trained as a word. Reusing it.`,
             });
-            const existingGesture = gestures.find(g => g.label.toLowerCase() === gestureName.toLowerCase());
             const gestureData: SentenceGesture = {
                 label: gestureName,
-                samples: existingGesture ? existingGesture.samples : [],
+                samples: existingWord.samples,
             };
             onCaptureComplete(gestureData);
             return;
         }
+
+        if (existingSentenceGesture) {
+            toast({
+                title: 'Reusing Gesture',
+                description: `The gesture for "${gestureName}" was found in another sentence. Reusing it.`,
+            });
+            const gestureData: SentenceGesture = {
+                label: gestureName,
+                samples: existingSentenceGesture.samples,
+            };
+            onCaptureComplete(gestureData);
+            return;
+        }
+
 
         setIsSaving(true);
         const normalizedSamples = capturedSamples.map(sample => normalizeLandmarks(sample));

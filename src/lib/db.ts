@@ -66,7 +66,7 @@ export const gestureDB = {
   },
   async getAll() {
     const db = await getDB();
-    return db.getAll(GESTURE_STORE_NAME);
+    return db.getAll(GESTURE_STORE_name);
   },
   async add(gesture: Gesture) {
     const db = await getDB();
@@ -97,12 +97,12 @@ export const sentenceDB = {
       const gestureStore = tx.objectStore(GESTURE_STORE_NAME);
       const sentenceStore = tx.objectStore(SENTENCE_STORE_NAME);
 
-      const existingGestures = await gestureStore.getAll();
-      const existingGestureLabels = existingGestures.map(g => g.label.toLowerCase());
+      const existingGestureLabels = (await gestureStore.getAll()).map(g => g.label.toLowerCase());
 
       for(const gesture of sentence.gestures) {
+          // Add the gesture to the main gesture store only if it's a new, unique gesture
           if (!existingGestureLabels.includes(gesture.label.toLowerCase())) {
-              gestureStore.put({
+              await gestureStore.put({
                   label: gesture.label,
                   description: `Gesture for "${gesture.label}" from sentence "${sentence.label}"`,
                   samples: gesture.samples,
