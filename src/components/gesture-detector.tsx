@@ -152,7 +152,6 @@ export function GestureDetector() {
     
     const now = Date.now();
     if (now < sentenceCooldownEndRef.current) {
-        // We are in a cooldown period after a sentence was detected, so don't detect anything.
         return;
     }
 
@@ -160,7 +159,6 @@ export function GestureDetector() {
     const knnResult = kNearestNeighbors(landmarks, combinedGestureSet, 3);
     
     if (knnResult.confidence > CONFIDENCE_THRESHOLD && knnResult.label !== 'Unknown') {
-        // Debounce recognition of the same word
         if (lastRecognizedWordRef.current?.label === knnResult.label && now - lastRecognizedWordRef.current.timestamp < 1000) {
             return;
         }
@@ -169,24 +167,23 @@ export function GestureDetector() {
         setWordHistory(prev => [knnResult.label, ...prev].slice(0, 5));
         lastRecognizedWordRef.current = { label: knnResult.label, timestamp: now };
 
-        // Sentence logic
         const newSequence = [...currentSequence, knnResult.label];
         setCurrentSequence(newSequence);
         
-        // Reset timeout
         if (sequenceTimeoutRef.current) clearTimeout(sequenceTimeoutRef.current);
         sequenceTimeoutRef.current = setTimeout(resetSequence, SEQUENCE_TIMEOUT_MS);
 
-        // Check for sentence match
         for (const sentence of trainedSentences) {
-            if (sentence.gestures && newSequence.length === sentence.gestures.length) {
-                const isMatch = sentence.gestures.every((g, i) => g.label === newSequence[i]);
+            if (sentence.gestures && newSequence.length >= sentence.gestures.length) {
+                const sequenceToCheck = newSequence.slice(-sentence.gestures.length);
+                const isMatch = sentence.gestures.every((g, i) => g.label === sequenceToCheck[i]);
+                
                 if (isMatch) {
                     setSentenceResult(sentence.label);
-                    setWordResult(null); // Clear word result
+                    setWordResult(null);
                     resetSequence();
                     sentenceCooldownEndRef.current = Date.now() + SENTENCE_COOLDOWN_MS;
-                    return; // Exit after match
+                    return;
                 }
             }
         }
@@ -214,7 +211,6 @@ export function GestureDetector() {
   }, [isDetecting, handleDetection, resetSequence]);
 
   useEffect(() => {
-    // Clear sentence result after cooldown
     if(sentenceResult) {
         const timer = setTimeout(() => setSentenceResult(null), SENTENCE_COOLDOWN_MS);
         return () => clearTimeout(timer);
