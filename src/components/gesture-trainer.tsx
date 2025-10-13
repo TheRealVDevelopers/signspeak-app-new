@@ -219,7 +219,7 @@ function SentenceGestureCapturer({ gestureName, onCaptureComplete, lastLandmarks
         }
         
         const existingGesture = gestures.find(g => g.label.toLowerCase() === gestureName.toLowerCase());
-        const allSentenceGestures = sentences.filter(s => s.gestures).flatMap(s => s.gestures);
+        const allSentenceGestures = sentences.filter(s => s.gestures).flatMap(s => s.gestures).filter(Boolean);
         const existingInSentence = allSentenceGestures.find(g => g.label.toLowerCase() === gestureName.toLowerCase());
 
         if (existingGesture || existingInSentence) {
@@ -310,8 +310,8 @@ function SentenceTrainer({ onIsCapturingChange, lastLandmarks, addSentence, gest
 
   const startTraining = () => {
       const words = sentenceLabel.trim().split(/\s+/).filter(Boolean);
-      if (words.length < 2) {
-          toast({ variant: 'destructive', title: 'Error', description: 'A sentence must have at least 2 words.' });
+      if (words.length === 0) {
+          toast({ variant: 'destructive', title: 'Error', description: 'Please enter a sentence.' });
           return;
       }
       if (sentences.some(s => s.label.toLowerCase() === sentenceLabel.trim().toLowerCase())) {
