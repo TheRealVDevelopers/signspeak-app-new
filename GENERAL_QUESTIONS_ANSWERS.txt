@@ -1,0 +1,115 @@
+# General Questions and Answers about SignSpeak Application
+
+## 1. What is the SignSpeak application?
+Answer: SignSpeak is a web application that translates Indian Sign Language (ISL) gestures into text using AI-powered gesture recognition. It allows users to train the system with custom gestures for words or sentences and then use their webcam to detect those gestures in real-time, effectively bridging the communication gap for the hearing impaired.
+
+## 2. What is the main purpose of this application?
+Answer: The main purpose is to facilitate communication between hearing-impaired individuals and those who don't understand sign language by translating sign language gestures into readable text in real-time.
+
+## 3. What technologies have been used in developing this application?
+Answer: The application uses:
+- Frontend: Next.js 15 with React 18, TypeScript, and Tailwind CSS
+- AI/ML: MediaPipe Tasks Vision for hand landmark detection
+- Database: IndexedDB (via idb library) for client-side storage
+- UI Components: Custom UI library based on Radix UI and shadcn/ui
+- Additional Libraries: Zod for schema validation, Lucide React for icons
+
+## 4. How does the gesture detection work?
+Answer: The application uses MediaPipe's HandLandmarker model to detect hand landmarks in real-time through the webcam. It identifies 21 key points on the hand and uses these coordinates to recognize specific gestures. The system then compares these detected landmarks with trained gesture samples using a K-Nearest Neighbors (KNN) algorithm to identify the most likely gesture.
+
+## 5. How does the training process work?
+Answer: Users can train the system by:
+1. Capturing multiple samples (30) of a specific gesture
+2. The system normalizes the landmark data to account for position, scale, and orientation differences
+3. The normalized samples are stored in the browser's IndexedDB
+4. During detection, new gestures are compared against these stored samples
+
+## 6. Can the application recognize the same person consistently?
+Answer: Yes, the application focuses on recognizing gestures rather than identifying specific individuals. It normalizes hand landmark data to be position, scale, and orientation invariant, which means it can recognize the same gesture regardless of where the hand is positioned in the frame, how large it appears, or its orientation.
+
+## 7. How accurate is the gesture recognition?
+Answer: The accuracy depends on several factors:
+- Quality of training samples (more diverse samples improve accuracy)
+- Lighting conditions
+- Camera quality
+- How clearly the gesture is performed
+- The system uses a confidence threshold (0.8) to filter out low-confidence detections
+
+## 8. What machine learning algorithms are used?
+Answer: The application primarily uses:
+- K-Nearest Neighbors (KNN) algorithm for gesture classification
+- Landmark normalization techniques for size/position invariance
+- Multi-frame verification to improve detection accuracy
+
+## 9. Where is the data stored?
+Answer: All gesture data is stored locally in the user's browser using IndexedDB, which is a client-side database. No data is sent to external servers, ensuring privacy and enabling offline functionality.
+
+## 10. Can the application work offline?
+Answer: Yes, after the initial load and model download, the application can work offline since all processing happens in the browser and data is stored locally.
+
+## 11. What new technologies could be added to improve the application?
+Answer: Potential improvements include:
+- Integration with TensorFlow.js for more sophisticated neural network models
+- 3D gesture recognition using depth cameras
+- Voice output for text-to-speech functionality
+- Cloud synchronization for sharing gesture libraries between users
+- Mobile app version with native camera APIs
+- Support for additional sign languages
+
+## 12. How does the sentence detection work?
+Answer: Sentence detection works by:
+1. Recognizing individual words in sequence
+2. Comparing the sequence of detected words against trained sentence patterns
+3. When a match is found, the complete sentence is displayed
+4. A timeout mechanism resets the sequence after periods of inactivity
+
+## 13. What are the limitations of the current system?
+Answer: Current limitations include:
+- Requires good lighting conditions for accurate detection
+- Dependent on camera quality
+- Limited to static gesture recognition (not continuous signing)
+- Gesture library must be built by the user
+- No multi-user or cloud synchronization features
+
+## 14. How can the application be extended in the future?
+Answer: Future extensions could include:
+- Multi-language support for different sign languages
+- Gesture analytics to track user progress
+- Community features for sharing gesture libraries
+- Integration with communication platforms
+- Mobile application development
+- Advanced ML models for better accuracy
+
+## 15. What is MediaPipe and why is it used?
+Answer: MediaPipe is Google's framework for building multimodal applied ML pipelines. It's used because it provides pre-trained models for hand landmark detection that work efficiently in real-time directly in the browser without requiring external servers.
+
+## 16. How does the application handle different hand positions and sizes?
+Answer: The application uses landmark normalization techniques that:
+- Center all landmarks around a common origin point
+- Scale landmarks to a unit sphere to remove size dependencies
+- This makes the recognition invariant to position, scale, and orientation changes
+
+## 17. Can multiple gestures be detected simultaneously?
+Answer: The current implementation can detect gestures from two hands simultaneously, which is useful for signs that require both hands. However, it processes each hand's landmarks separately and then combines them for recognition.
+
+## 18. What browsers are supported?
+Answer: The application works on modern browsers that support:
+- WebAssembly (required for MediaPipe)
+- Webcam access APIs
+- IndexedDB for local storage
+- ES6 JavaScript features
+
+## 19. How is user privacy protected?
+Answer: User privacy is protected because:
+- All processing happens locally in the browser
+- No data is sent to external servers
+- Gesture data is stored only in the user's browser
+- Users have complete control over their data
+
+## 20. What development tools were used?
+Answer: Development tools include:
+- Visual Studio Code as the primary IDE
+- Node.js and npm for package management
+- TypeScript for type-safe JavaScript development
+- Tailwind CSS for styling
+- Git for version control

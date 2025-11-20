@@ -33,6 +33,8 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // Configure the pages directory
+  pageExtensions: ['tsx', 'ts', 'jsx', 'js'],
 };
 
 export default nextConfig;
